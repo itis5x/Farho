@@ -39,6 +39,8 @@ function createColumn(tableId: string, c: ColumnDef) {
       return db.createVarcharColumn({ ...base, size: c.size, xdefault: dflt(c.default) });
     case "text":
       return db.createTextColumn(base);
+    case "mediumtext":
+      return db.createMediumtextColumn(base);
     case "integer":
       return db.createIntegerColumn({ ...base, xdefault: dflt(c.default) });
     case "float":

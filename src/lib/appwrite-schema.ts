@@ -26,6 +26,7 @@ export const TABLES = {
 export type ColumnDef =
   | { key: string; type: "varchar"; size: number; required?: boolean; default?: string }
   | { key: string; type: "text"; required?: boolean }
+  | { key: string; type: "mediumtext"; required?: boolean }
   | { key: string; type: "integer"; required?: boolean; default?: number }
   | { key: string; type: "float"; required?: boolean; default?: number }
   | { key: string; type: "boolean"; required?: boolean; default?: boolean }
@@ -95,6 +96,8 @@ export const SCHEMA: TableDef[] = [
       { key: "payments", type: "text" },
       // JSON: inbox/assistant settings (see src/lib/inbox/settings.ts).
       { key: "inbox", type: "text" },
+      // JSON: homepage sections, custom pages and custom CSS (see src/lib/builder/schema.ts).
+      { key: "layout", type: "mediumtext" },
     ],
     indexes: [
       { key: "slug_unique", type: "unique", columns: ["slug"] },

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { CartButton, CartProvider } from "@/components/storefront/cart";
 import { ChatWidget } from "@/components/storefront/chat-widget";
+import { parseLayout } from "@/lib/builder/schema";
 import { getStorefront } from "@/lib/store-data";
 import { FONT_CLASS, THEME_STYLES } from "@/lib/storefront";
 import { cn } from "@/lib/utils";
@@ -40,12 +41,17 @@ export default async function StorefrontLayout({
   }
 
   const centered = store.theme === "minimal";
+  const layout = parseLayout(store.layout, store);
+  const menuPages = layout.pages.filter((p) => p.in_menu);
+  // Custom CSS is the store owner's own; escape "</" so it can't close the style tag.
+  const css = layout.custom_css.replace(/<\//g, "<\\/");
   return (
     <CartProvider storeSlug={store.slug}>
       <div
         className={cn("flex min-h-screen flex-col bg-white text-zinc-900", FONT_CLASS[store.font])}
         style={{ ["--brand" as string]: store.primary_color }}
       >
+        {css && <style dangerouslySetInnerHTML={{ __html: css }} />}
         {isOwner && (
           <div className="flex items-center justify-center gap-3 bg-zinc-900 px-4 py-1.5 text-xs text-white">
             {store.published ? "You're viewing your live store." : "Preview — your store is unpublished."}
@@ -79,6 +85,11 @@ export default async function StorefrontLayout({
               <Link href={`${base}/products`} className="hover:opacity-70">
                 Shop
               </Link>
+              {menuPages.slice(0, 3).map((p) => (
+                <Link key={p.slug} href={`${base}/pages/${p.slug}`} className="hidden hover:opacity-70 md:inline">
+                  {p.title}
+                </Link>
+              ))}
               <Link href={`${base}/track`} className="hover:opacity-70">
                 Track order
               </Link>
@@ -103,6 +114,15 @@ export default async function StorefrontLayout({
               {store.address && <p>📍 {store.address}</p>}
             </div>
             <div className="space-y-1">
+              {layout.pages.length > 0 && (
+                <div className="mb-3 flex flex-col gap-1 text-zinc-600">
+                  {layout.pages.map((p) => (
+                    <Link key={p.slug} href={`${base}/pages/${p.slug}`} className="hover:text-brand">
+                      {p.title}
+                    </Link>
+                  ))}
+                </div>
+              )}
               <div className="font-semibold">Follow us</div>
               <div className="flex gap-3 text-zinc-600">
                 {store.facebook_url && <a href={store.facebook_url} target="_blank" rel="noopener noreferrer" className="hover:text-brand">Facebook</a>}

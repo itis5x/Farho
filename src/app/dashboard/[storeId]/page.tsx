@@ -52,7 +52,7 @@ export default async function OverviewPage({
 
   const checklist = [
     { done: counts.products > 0, label: "Add your first product", href: `/dashboard/${store.id}/products/new` },
-    { done: !!store.logo_url || store.hero_title !== `Welcome to ${store.name}`, label: "Customise your website design", href: `/dashboard/${store.id}/design` },
+    { done: !!store.layout || !!store.logo_url, label: "Customise your website design", href: `/dashboard/${store.id}/design` },
     { done: !!store.contact_phone, label: "Add contact & delivery details", href: `/dashboard/${store.id}/settings` },
     { done: stats.orders > 0, label: "Get your first order", href: storeUrl(store.slug) },
   ];

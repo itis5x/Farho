@@ -61,31 +61,25 @@ const designSchema = z.object({
   theme: z.enum(THEMES),
   font: z.enum(FONTS),
   primary_color: z.string().regex(/^#[0-9a-fA-F]{6}$/, "Pick a valid colour."),
-  tagline: z.string().trim().max(120),
-  hero_title: z.string().trim().max(120),
-  hero_subtitle: z.string().trim().max(240),
-  announcement: z.string().trim().max(160),
+  tagline: z.string().trim().max(150),
+  announcement: z.string().trim().max(200),
   about: z.string().trim().max(2000),
-  show_categories: bool,
-  show_featured: bool,
-  show_about: bool,
 });
 
 export async function updateDesign(storeId: string, _prev: FormState, form: FormData): Promise<FormState> {
   const { store } = await requireStore(storeId);
   const parsed = designSchema.safeParse(Object.fromEntries(form));
   if (!parsed.success) return { error: parsed.error.issues[0].message };
-  let logo: string, hero: string;
+  let logo: string;
   try {
     logo = await resolveImage(form, "logo_url", store.logo_url);
-    hero = await resolveImage(form, "hero_image_url", store.hero_image_url);
   } catch (e) {
     return { error: (e as Error).message };
   }
-  await updateStoreRow(store.id, { ...parsed.data, logo_url: logo, hero_image_url: hero });
+  await updateStoreRow(store.id, { ...parsed.data, logo_url: logo });
   revalidatePath(`/store/${store.slug}`, "layout");
   revalidatePath(`/dashboard/${store.id}`, "layout");
-  return { ok: "Design saved. Your website has been updated." };
+  return { ok: "Brand saved. Your website has been updated." };
 }
 
 const money = z.coerce.number().min(0, "Amounts can't be negative.");

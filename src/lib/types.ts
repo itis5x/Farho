@@ -36,6 +36,7 @@ export type Store = {
   next_order_number: number;
   payments: string;
   inbox: string;
+  layout: string;
   created_at: string;
 };
 
