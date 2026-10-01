@@ -1,11 +1,15 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { BookDelivery } from "@/components/book-delivery";
 import { PrintButton } from "@/components/print-button";
 import { SubmitButton } from "@/components/form";
 import { StatusBadge } from "@/components/status-badge";
 import { addOrderNote, updateOrderStatus, updatePaymentStatus } from "@/lib/actions/orders";
 import { requireStore } from "@/lib/auth";
 import { getOrder, listOrderEvents, listOrderItems, listOrdersByCustomer } from "@/lib/data";
+import { refreshDelivery } from "@/lib/actions/delivery";
+import { guessBranch, ncmBranches } from "@/lib/couriers/ncm";
+import { COURIER_LABELS, getNcm, getPathao } from "@/lib/couriers/service";
 import { METHOD_LABELS, type PaymentMethod } from "@/lib/payments/settings";
 import { ORDER_STATUSES, PAYMENT_STATUSES } from "@/lib/types";
 import { cn, formatDate, formatMoney } from "@/lib/utils";
@@ -24,6 +28,9 @@ export default async function OrderPage({ params }: { params: Promise<{ storeId:
     listOrderEvents(order.id),
     order.customer_id ? listOrdersByCustomer(order.customer_id) : Promise.resolve([]),
   ]);
+  const [pathao, ncm] = await Promise.all([getPathao(store.id), getNcm(store.id)]);
+  const branches = ncm && !order.courier_ref ? await ncmBranches(ncm.sandbox).catch(() => []) : [];
+  const suggested = guessBranch(branches, order.city, order.address)?.name ?? "";
   const live = customerOrders.filter((o) => o.status !== "cancelled");
   const history = order.customer_id ? { n: live.length, spent: live.reduce((s, o) => s + o.total, 0) } : null;
   const money = (n: number) => formatMoney(n, store.currency);
@@ -198,6 +205,36 @@ export default async function OrderPage({ params }: { params: Promise<{ storeId:
             </form>
             {order.status !== "cancelled" && (
               <p className="text-xs text-zinc-500">Cancelling an order puts its items back in stock.</p>
+            )}
+          </div>
+
+          <div className="no-print card space-y-3 p-5 text-sm">
+            <h2 className="font-semibold">🚚 Delivery</h2>
+            {order.courier ? (
+              <>
+                <div className="rounded-lg bg-zinc-50 p-3">
+                  <div className="font-medium">{COURIER_LABELS[order.courier] ?? order.courier}</div>
+                  {order.courier_ref && <div className="text-xs text-zinc-500">Tracking: <span className="font-mono select-all">{order.courier_ref}</span></div>}
+                  <div className="mt-1">Status: <span className="font-medium">{order.courier_status || "Booked"}</span></div>
+                  {order.courier_fee != null && <div className="text-xs text-zinc-500">Delivery fee: {money(order.courier_fee)}</div>}
+                </div>
+                {(order.courier === "pathao" || order.courier === "ncm") && (
+                  <form action={refreshDelivery.bind(null, store.id, order.id)}>
+                    <SubmitButton className="btn-secondary w-full" pendingText="Checking…">Refresh courier status</SubmitButton>
+                  </form>
+                )}
+              </>
+            ) : order.status === "cancelled" ? (
+              <p className="text-zinc-500">Cancelled orders can&apos;t be shipped.</p>
+            ) : (
+              <BookDelivery
+                storeId={store.id}
+                orderId={order.id}
+                couriers={{ pathao: !!pathao, ncm: !!ncm }}
+                branches={branches.map((b) => b.name)}
+                suggestedBranch={suggested}
+                cod={order.payment_status === "paid" ? "Already paid" : money(order.total)}
+              />
             )}
           </div>
 

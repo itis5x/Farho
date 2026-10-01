@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getOrderByToken, listOrderItems } from "@/lib/data";
 import { PayNowButton } from "@/components/storefront/pay-now";
+import { COURIER_LABELS } from "@/lib/couriers/labels";
 import { METHOD_LABELS, ONLINE_METHODS, type PaymentMethod } from "@/lib/payments/settings";
 import { getStorefront } from "@/lib/store-data";
 import { THEME_STYLES } from "@/lib/storefront";
@@ -115,6 +116,13 @@ export default async function OrderStatusPage({
             </dd>
           </div>
         </dl>
+        {order.courier && (
+          <div className="mt-6 rounded-lg border border-zinc-200 p-4 text-sm">
+            <div className="font-semibold">🚚 {COURIER_LABELS[order.courier] ?? order.courier}</div>
+            {order.courier_ref && <div className="text-zinc-600">Tracking number: <span className="font-mono">{order.courier_ref}</span></div>}
+            {order.courier_status && <div className="text-zinc-600">Latest update: {order.courier_status}</div>}
+          </div>
+        )}
         <div className="mt-6 rounded-lg bg-zinc-50 p-4 text-sm">
           <div className="font-semibold">Delivering to</div>
           <p className="mt-1 text-zinc-700">

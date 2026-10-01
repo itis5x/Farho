@@ -117,6 +117,11 @@ export type Order = {
   payment_gateway_mode: string;
   paid_at: string | null;
   source: string;
+  courier: string;
+  courier_ref: string;
+  courier_status: string;
+  courier_fee: number | null;
+  courier_booked_at: string | null;
   payment_status: PaymentStatus;
   status: OrderStatus;
   created_at: string;

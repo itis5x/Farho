@@ -181,6 +181,11 @@ export const SCHEMA: TableDef[] = [
       v("payment_gateway_mode", 10),
       { key: "paid_at", type: "datetime" },
       v("source", 20, { default: "website" }),
+      v("courier", 30),
+      v("courier_ref", 80),
+      v("courier_status", 80),
+      { key: "courier_fee", type: "float" },
+      { key: "courier_booked_at", type: "datetime" },
       { key: "payment_status", type: "enum", elements: ["unpaid", "paid", "refunded"], default: "unpaid" },
       {
         key: "status",
@@ -195,6 +200,7 @@ export const SCHEMA: TableDef[] = [
       { key: "store_number_unique", type: "unique", columns: ["store_id", "number"] },
       { key: "store_created_idx", type: "key", columns: ["store_id", "created_at"], orders: ["ASC", "DESC"] },
       { key: "customer_idx", type: "key", columns: ["customer_id"] },
+      { key: "courier_ref_idx", type: "key", columns: ["courier_ref"] },
     ],
   },
   {
