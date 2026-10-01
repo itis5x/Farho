@@ -69,9 +69,15 @@ export default async function OrdersPage({
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Orders</h1>
-        <p className="text-sm text-zinc-600">Manage and fulfil orders from your website.</p>
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold">Orders</h1>
+          <p className="text-sm text-zinc-600">Every order from your website, chats and counter.</p>
+        </div>
+        <div className="flex gap-2">
+          <a href={`/api/export/orders/${store.id}`} className="btn-secondary">⬇ Export CSV</a>
+          <Link href={`/dashboard/${store.id}/pos?mode=delivery`} className="btn-primary">+ New order</Link>
+        </div>
       </div>
 
       <div className="flex gap-1 overflow-x-auto border-b border-zinc-200">

@@ -79,6 +79,10 @@ export type NewOrder = {
   source: OrderSource;
   /** First timeline entry, e.g. "Order placed by customer". */
   event: string;
+  /** Seller-entered extra discount (POS / manual orders). */
+  extraDiscount?: number;
+  /** Override the store's delivery charge (e.g. 0 for counter sales). */
+  deliveryCharge?: number;
 };
 
 /**
@@ -90,6 +94,11 @@ export async function createOrder(input: NewOrder): Promise<{ order: Order; pric
   const priced = await priceCart(store, input.cart, input.couponCode ?? "");
   if ("error" in priced) return priced;
   if (input.couponCode && priced.couponError) return { error: priced.couponError };
+  if (input.extraDiscount || input.deliveryCharge != null) {
+    priced.discount = Math.min(priced.subtotal, round(priced.discount + Math.max(0, input.extraDiscount ?? 0)));
+    if (input.deliveryCharge != null) priced.delivery = Math.max(0, input.deliveryCharge);
+    priced.total = round(priced.subtotal - priced.discount + priced.delivery);
+  }
 
   const reserved: { table: string; id: string; qty: number }[] = [];
   const release = () =>

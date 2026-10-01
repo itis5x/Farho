@@ -6,7 +6,9 @@ import { cn } from "@/lib/utils";
 
 const ITEMS = [
   { href: "", label: "Overview", icon: "📊" },
+  { href: "/reports", label: "Reports", icon: "📈" },
   { href: "/orders", label: "Orders", icon: "📦" },
+  { href: "/pos", label: "POS / New order", icon: "🧾" },
   { href: "/inbox", label: "Inbox", icon: "💬" },
   { href: "/products", label: "Products", icon: "🏷️" },
   { href: "/categories", label: "Categories", icon: "🗂️" },

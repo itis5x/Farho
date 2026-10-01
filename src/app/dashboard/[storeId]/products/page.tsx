@@ -34,9 +34,14 @@ export default async function ProductsPage({
           <h1 className="text-2xl font-bold">Products</h1>
           <p className="text-sm text-zinc-600">{products.length} products</p>
         </div>
-        <Link href={`/dashboard/${store.id}/products/new`} className="btn-primary">
-          + Add product
-        </Link>
+        <div className="flex flex-wrap gap-2">
+          <Link href={`/dashboard/${store.id}/products/labels`} className="btn-secondary">🏷️ Barcode labels</Link>
+          <Link href={`/dashboard/${store.id}/products/import`} className="btn-secondary">⬆ Import CSV</Link>
+          <a href={`/api/export/products/${store.id}`} className="btn-secondary">⬇ Export CSV</a>
+          <Link href={`/dashboard/${store.id}/products/new`} className="btn-primary">
+            + Add product
+          </Link>
+        </div>
       </div>
       {saved && <p className="rounded-lg bg-emerald-50 px-4 py-2 text-sm text-emerald-700">Product saved.</p>}
       <form className="flex gap-2">
