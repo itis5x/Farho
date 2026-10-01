@@ -2,8 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { StatusBadge } from "@/components/status-badge";
 import { requireStore } from "@/lib/auth";
-import { db } from "@/lib/db";
-import type { Customer, Order } from "@/lib/types";
+import { getCustomer, listOrdersByCustomer } from "@/lib/data";
 import { formatDate, formatMoney } from "@/lib/utils";
 
 export const metadata = { title: "Customer" };
@@ -11,13 +10,9 @@ export const metadata = { title: "Customer" };
 export default async function CustomerPage({ params }: { params: Promise<{ storeId: string; customerId: string }> }) {
   const { storeId, customerId } = await params;
   const { store } = await requireStore(storeId);
-  const customer = db
-    .prepare("SELECT * FROM customers WHERE id = ? AND store_id = ?")
-    .get(Number(customerId), store.id) as Customer | undefined;
+  const customer = await getCustomer(store.id, customerId);
   if (!customer) notFound();
-  const orders = db
-    .prepare("SELECT * FROM orders WHERE customer_id = ? ORDER BY created_at DESC")
-    .all(customer.id) as Order[];
+  const orders = await listOrdersByCustomer(customer.id);
   const spent = orders.filter((o) => o.status !== "cancelled").reduce((s, o) => s + o.total, 0);
 
   return (

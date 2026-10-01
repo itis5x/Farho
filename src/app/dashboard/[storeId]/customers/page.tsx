@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { requireStore } from "@/lib/auth";
-import { db } from "@/lib/db";
-import type { Customer } from "@/lib/types";
+import { listCustomers, listOrders } from "@/lib/data";
+import { Query } from "@/lib/appwrite";
 import { formatDate, formatMoney } from "@/lib/utils";
 
 export const metadata = { title: "Customers" };
@@ -16,17 +16,23 @@ export default async function CustomersPage({
   const { storeId } = await params;
   const { q = "" } = await searchParams;
   const { store } = await requireStore(storeId);
-  const customers = db
-    .prepare(
-      `SELECT c.*,
-         COUNT(o.id) AS order_count,
-         COALESCE(SUM(CASE WHEN o.status != 'cancelled' THEN o.total END), 0) AS spent,
-         MAX(o.created_at) AS last_order
-       FROM customers c LEFT JOIN orders o ON o.customer_id = c.id
-       WHERE c.store_id = ? AND (c.name LIKE ? OR c.phone LIKE ? OR c.email LIKE ?)
-       GROUP BY c.id ORDER BY last_order DESC`,
-    )
-    .all(store.id, `%${q}%`, `%${q}%`, `%${q}%`) as (Customer & { order_count: number; spent: number; last_order: string | null })[];
+  const [all, orders] = await Promise.all([
+    listCustomers(store.id),
+    listOrders(store.id, [Query.select(["$id", "customer_id", "status", "total", "created_at"])]),
+  ]);
+  const needle = q.trim().toLowerCase();
+  const customers = all
+    .filter((c) => !needle || [c.name, c.phone, c.email].some((f) => f.toLowerCase().includes(needle)))
+    .map((c) => {
+      const mine = orders.filter((o) => o.customer_id === c.id);
+      return {
+        ...c,
+        order_count: mine.length,
+        spent: mine.filter((o) => o.status !== "cancelled").reduce((s, o) => s + o.total, 0),
+        last_order: mine[0]?.created_at ?? null,
+      };
+    })
+    .sort((a, b) => (b.last_order ?? "").localeCompare(a.last_order ?? ""));
 
   return (
     <div className="space-y-6">

@@ -1,8 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { db } from "@/lib/db";
+import { getOrderByToken, listOrderItems } from "@/lib/data";
 import { getStorefront } from "@/lib/store-data";
-import type { Order, OrderItem } from "@/lib/types";
 import { cn, formatDate, formatMoney } from "@/lib/utils";
 
 export const metadata = { title: "Your order", robots: { index: false } };
@@ -26,11 +25,9 @@ export default async function OrderStatusPage({
   const { new: isNew } = await searchParams;
   const { store, hidden } = await getStorefront(slug);
   if (hidden) return null;
-  const order = db
-    .prepare("SELECT * FROM orders WHERE public_token = ? AND store_id = ?")
-    .get(token, store.id) as Order | undefined;
+  const order = /^[a-f0-9]{32}$/.test(token) ? await getOrderByToken(store.id, token) : null;
   if (!order) notFound();
-  const items = db.prepare("SELECT * FROM order_items WHERE order_id = ?").all(order.id) as OrderItem[];
+  const items = await listOrderItems([order.id]);
   const money = (n: number) => formatMoney(n, store.currency);
   const step = STEPS.findIndex((s) => s.key === order.status);
 

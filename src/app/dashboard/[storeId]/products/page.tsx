@@ -1,8 +1,7 @@
 import Link from "next/link";
 import { requireStore } from "@/lib/auth";
 import { toggleProduct } from "@/lib/actions/catalog";
-import { db } from "@/lib/db";
-import type { Product } from "@/lib/types";
+import { listCategories, listProducts, unitsSoldByProduct } from "@/lib/data";
 import { formatMoney } from "@/lib/utils";
 
 export const metadata = { title: "Products" };
@@ -17,16 +16,16 @@ export default async function ProductsPage({
   const { storeId } = await params;
   const { q = "", saved } = await searchParams;
   const { store } = await requireStore(storeId);
-  const products = db
-    .prepare(
-      `SELECT p.*, c.name AS category_name,
-         (SELECT COALESCE(SUM(oi.quantity), 0) FROM order_items oi JOIN orders o ON o.id = oi.order_id
-          WHERE oi.product_id = p.id AND o.status != 'cancelled') AS sold
-       FROM products p LEFT JOIN categories c ON c.id = p.category_id
-       WHERE p.store_id = ? AND (p.name LIKE ? OR p.sku LIKE ?)
-       ORDER BY p.created_at DESC, p.id DESC`,
-    )
-    .all(store.id, `%${q}%`, `%${q}%`) as (Product & { category_name: string | null; sold: number })[];
+  const [all, categories, sold] = await Promise.all([
+    listProducts(store.id),
+    listCategories(store.id),
+    unitsSoldByProduct(store.id),
+  ]);
+  const needle = q.trim().toLowerCase();
+  const catName = new Map(categories.map((c) => [c.id, c.name]));
+  const products = all
+    .filter((p) => !needle || p.name.toLowerCase().includes(needle) || p.sku.toLowerCase().includes(needle))
+    .map((p) => ({ ...p, category_name: catName.get(p.category_id) ?? null, sold: sold.get(p.id) ?? 0 }));
 
   return (
     <div className="space-y-6">

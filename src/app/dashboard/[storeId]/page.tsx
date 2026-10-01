@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { StatusBadge } from "@/components/status-badge";
 import { requireStore } from "@/lib/auth";
-import { db } from "@/lib/db";
-import type { Order, Product } from "@/lib/types";
+import { countProducts, listLowStock, listOrders } from "@/lib/data";
+import { Query } from "@/lib/appwrite";
+import { TABLES } from "@/lib/appwrite-schema";
+import { countRows } from "@/lib/appwrite";
 import { formatDate, formatMoney, storeUrl } from "@/lib/utils";
 
 export const metadata = { title: "Overview" };
@@ -18,49 +20,35 @@ export default async function OverviewPage({
   const { welcome } = await searchParams;
   const { store } = await requireStore(storeId);
 
-  const stats = db
-    .prepare(
-      `SELECT
-        COUNT(*) AS orders,
-        COALESCE(SUM(CASE WHEN status != 'cancelled' THEN total END), 0) AS revenue,
-        COUNT(CASE WHEN status = 'pending' THEN 1 END) AS pending,
-        COUNT(CASE WHEN date(created_at) = date('now') THEN 1 END) AS today
-       FROM orders WHERE store_id = ? AND created_at >= datetime('now', '-30 days')`,
-    )
-    .get(store.id) as { orders: number; revenue: number; pending: number; today: number };
+  const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+  const [recentOrders, products, customers, lowStock, allPending] = await Promise.all([
+    listOrders(store.id, [Query.greaterThanEqual("created_at", since)]),
+    countProducts(store.id),
+    countRows(TABLES.customers, [Query.equal("store_id", store.id)]),
+    listLowStock(store.id),
+    listOrders(store.id, [Query.equal("status", "pending"), Query.select(["$id"])]),
+  ]);
+  const todayKey = new Date().toISOString().slice(0, 10);
+  const live = recentOrders.filter((o) => o.status !== "cancelled");
+  const stats = {
+    orders: recentOrders.length,
+    revenue: live.reduce((s, o) => s + o.total, 0),
+    pending: allPending.length,
+    today: recentOrders.filter((o) => o.created_at.slice(0, 10) === todayKey).length,
+  };
+  const counts = { products, customers };
 
-  const counts = db
-    .prepare(
-      `SELECT
-        (SELECT COUNT(*) FROM products WHERE store_id = ?) AS products,
-        (SELECT COUNT(*) FROM customers WHERE store_id = ?) AS customers`,
-    )
-    .get(store.id, store.id) as { products: number; customers: number };
-
-  const daily = db
-    .prepare(
-      `SELECT date(created_at) AS day, SUM(total) AS revenue, COUNT(*) AS orders
-       FROM orders WHERE store_id = ? AND status != 'cancelled' AND created_at >= datetime('now', '-13 days', 'start of day')
-       GROUP BY day`,
-    )
-    .all(store.id) as { day: string; revenue: number; orders: number }[];
-  const byDay = new Map(daily.map((d) => [d.day, d]));
+  const byDay = new Map<string, number>();
+  for (const o of live) byDay.set(o.created_at.slice(0, 10), (byDay.get(o.created_at.slice(0, 10)) ?? 0) + o.total);
   const days = Array.from({ length: 14 }, (_, i) => {
     const d = new Date();
     d.setUTCDate(d.getUTCDate() - (13 - i));
     const key = d.toISOString().slice(0, 10);
-    return { key, label: d.toLocaleDateString("en-US", { month: "short", day: "numeric" }), revenue: byDay.get(key)?.revenue ?? 0 };
+    return { key, label: d.toLocaleDateString("en-US", { month: "short", day: "numeric" }), revenue: byDay.get(key) ?? 0 };
   });
   const maxRevenue = Math.max(1, ...days.map((d) => d.revenue));
 
-  const recent = db
-    .prepare("SELECT * FROM orders WHERE store_id = ? ORDER BY created_at DESC, id DESC LIMIT 6")
-    .all(store.id) as Order[];
-  const lowStock = db
-    .prepare(
-      "SELECT * FROM products WHERE store_id = ? AND stock IS NOT NULL AND stock <= 5 AND active = 1 ORDER BY stock ASC LIMIT 5",
-    )
-    .all(store.id) as Product[];
+  const recent = recentOrders.length >= 6 ? recentOrders.slice(0, 6) : (await listOrders(store.id)).slice(0, 6);
 
   const checklist = [
     { done: counts.products > 0, label: "Add your first product", href: `/dashboard/${store.id}/products/new` },

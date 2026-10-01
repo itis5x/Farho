@@ -3,19 +3,17 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AddToCart } from "@/components/storefront/add-to-cart";
 import { ProductCard } from "@/components/storefront/product-card";
-import { db } from "@/lib/db";
+import { getActiveProductBySlug, getCategory, listProducts } from "@/lib/data";
 import { getStorefront } from "@/lib/store-data";
 import { THEME_STYLES } from "@/lib/storefront";
 import type { Product } from "@/lib/types";
 import { formatMoney } from "@/lib/utils";
 
-function loadProduct(storeId: number, slug: string) {
-  return db
-    .prepare(
-      `SELECT p.*, c.name AS category_name, c.slug AS category_slug FROM products p
-       LEFT JOIN categories c ON c.id = p.category_id WHERE p.store_id = ? AND p.slug = ? AND p.active = 1`,
-    )
-    .get(storeId, slug) as (Product & { category_name: string | null; category_slug: string | null }) | undefined;
+async function loadProduct(storeId: string, slug: string) {
+  const p = await getActiveProductBySlug(storeId, slug);
+  if (!p) return null;
+  const c = p.category_id ? await getCategory(storeId, p.category_id) : null;
+  return { ...p, category_name: c?.name ?? null, category_slug: c?.slug ?? null };
 }
 
 export async function generateMetadata({
@@ -25,7 +23,7 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { slug, productSlug } = await params;
   const { store } = await getStorefront(slug);
-  const p = loadProduct(store.id, productSlug);
+  const p = await loadProduct(store.id, productSlug);
   if (!p) return {};
   return { title: p.name, description: p.description.slice(0, 160), openGraph: { images: p.image_url ? [p.image_url] : [] } };
 }
@@ -34,15 +32,14 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
   const { slug, productSlug } = await params;
   const { store, hidden } = await getStorefront(slug);
   if (hidden) return null;
-  const product = loadProduct(store.id, productSlug);
+  const product = await loadProduct(store.id, productSlug);
   if (!product) notFound();
   const t = THEME_STYLES[store.theme];
   const base = `/store/${store.slug}`;
-  const related = db
-    .prepare(
-      "SELECT * FROM products WHERE store_id = ? AND active = 1 AND id != ? AND (category_id IS ? OR ? IS NULL) ORDER BY RANDOM() LIMIT 4",
-    )
-    .all(store.id, product.id, product.category_id, product.category_id) as Product[];
+  const related: Product[] = (await listProducts(store.id, { activeOnly: true }))
+    .filter((p) => p.id !== product.id && (!product.category_id || p.category_id === product.category_id))
+    .sort(() => Math.random() - 0.5)
+    .slice(0, 4);
   const off =
     product.compare_at_price && product.compare_at_price > product.price
       ? Math.round((1 - product.price / product.compare_at_price) * 100)

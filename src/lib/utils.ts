@@ -16,9 +16,8 @@ export function formatMoney(amount: number, currency = "NPR"): string {
   return `${symbol} ${value}`;
 }
 
-export function formatDate(sqliteDate: string): string {
-  // SQLite datetime('now') is UTC without a zone marker.
-  const d = new Date(sqliteDate.replace(" ", "T") + "Z");
+export function formatDate(iso: string): string {
+  const d = new Date(iso);
   return d.toLocaleString("en-US", {
     month: "short",
     day: "numeric",

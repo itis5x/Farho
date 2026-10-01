@@ -1,17 +1,17 @@
 import Link from "next/link";
 import { ProductCard } from "@/components/storefront/product-card";
-import { db } from "@/lib/db";
+import { listCategories, listProducts } from "@/lib/data";
 import { getStorefront } from "@/lib/store-data";
 import { THEME_STYLES } from "@/lib/storefront";
-import type { Category, Product } from "@/lib/types";
+import type { Product } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 export const metadata = { title: "Shop" };
 
 const SORTS = {
-  new: "p.created_at DESC, p.id DESC",
-  "price-asc": "p.price ASC",
-  "price-desc": "p.price DESC",
+  new: (a: Product, b: Product) => b.created_at.localeCompare(a.created_at),
+  "price-asc": (a: Product, b: Product) => a.price - b.price,
+  "price-desc": (a: Product, b: Product) => b.price - a.price,
 } as const;
 
 export default async function ShopPage({
@@ -30,16 +30,13 @@ export default async function ShopPage({
   const q = (sp.q ?? "").trim();
   const sort = (sp.sort && sp.sort in SORTS ? sp.sort : "new") as keyof typeof SORTS;
 
-  const categories = db.prepare("SELECT * FROM categories WHERE store_id = ? ORDER BY name").all(store.id) as Category[];
+  const [categories, all] = await Promise.all([listCategories(store.id), listProducts(store.id, { activeOnly: true })]);
   const active = categories.find((c) => c.slug === sp.category);
-
-  const products = db
-    .prepare(
-      `SELECT p.* FROM products p WHERE p.store_id = ? AND p.active = 1
-         AND (? IS NULL OR p.category_id = ?) AND (p.name LIKE ? OR p.description LIKE ?)
-       ORDER BY (p.stock = 0), ${SORTS[sort]}`,
-    )
-    .all(store.id, active?.id ?? null, active?.id ?? null, `%${q}%`, `%${q}%`) as Product[];
+  const needle = q.toLowerCase();
+  const products = all
+    .filter((p) => !active || p.category_id === active.id)
+    .filter((p) => !needle || p.name.toLowerCase().includes(needle) || p.description.toLowerCase().includes(needle))
+    .sort((a, b) => Number(a.stock === 0) - Number(b.stock === 0) || SORTS[sort](a, b));
 
   const link = (o: Record<string, string | undefined>) => {
     const p = new URLSearchParams();

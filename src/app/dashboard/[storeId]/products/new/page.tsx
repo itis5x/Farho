@@ -1,15 +1,14 @@
 import Link from "next/link";
 import { ProductForm } from "@/components/product-form";
 import { requireStore } from "@/lib/auth";
-import { db } from "@/lib/db";
-import type { Category } from "@/lib/types";
+import { listCategories } from "@/lib/data";
 
 export const metadata = { title: "Add product" };
 
 export default async function NewProductPage({ params }: { params: Promise<{ storeId: string }> }) {
   const { storeId } = await params;
   const { store } = await requireStore(storeId);
-  const categories = db.prepare("SELECT * FROM categories WHERE store_id = ? ORDER BY name").all(store.id) as Category[];
+  const categories = await listCategories(store.id);
   return (
     <div className="space-y-6">
       <div>

@@ -3,7 +3,8 @@ import { AdminNav } from "@/components/admin-nav";
 import { Logo } from "@/components/logo";
 import { UserMenu } from "@/components/user-menu";
 import { requireStore } from "@/lib/auth";
-import { db } from "@/lib/db";
+import { countOrders } from "@/lib/data";
+import { Query } from "@/lib/appwrite";
 import { storeUrl } from "@/lib/utils";
 
 export default async function StoreAdminLayout({
@@ -15,9 +16,7 @@ export default async function StoreAdminLayout({
 }) {
   const { storeId } = await params;
   const { user, store } = await requireStore(storeId);
-  const { pending } = db
-    .prepare("SELECT COUNT(*) AS pending FROM orders WHERE store_id = ? AND status = 'pending'")
-    .get(store.id) as { pending: number };
+  const pending = await countOrders(store.id, [Query.equal("status", "pending")]);
 
   return (
     <div className="flex min-h-screen flex-col lg:flex-row">

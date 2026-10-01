@@ -1,9 +1,8 @@
 import Link from "next/link";
 import { ProductCard } from "@/components/storefront/product-card";
-import { db } from "@/lib/db";
+import { listCategories, listProducts } from "@/lib/data";
 import { getStorefront } from "@/lib/store-data";
 import { THEME_STYLES } from "@/lib/storefront";
-import type { Category, Product } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 export default async function StoreHome({ params }: { params: Promise<{ slug: string }> }) {
@@ -13,20 +12,18 @@ export default async function StoreHome({ params }: { params: Promise<{ slug: st
   const t = THEME_STYLES[store.theme];
   const base = `/store/${store.slug}`;
 
-  const featured = db
-    .prepare("SELECT * FROM products WHERE store_id = ? AND active = 1 AND featured = 1 ORDER BY created_at DESC LIMIT 8")
-    .all(store.id) as Product[];
-  const latest = db
-    .prepare("SELECT * FROM products WHERE store_id = ? AND active = 1 ORDER BY created_at DESC, id DESC LIMIT 12")
-    .all(store.id) as Product[];
-  const categories = db
-    .prepare(
-      `SELECT c.*, (SELECT image_url FROM products p WHERE p.category_id = c.id AND p.active = 1 AND p.image_url != '' LIMIT 1) AS cover
-       FROM categories c WHERE c.store_id = ?
-         AND EXISTS (SELECT 1 FROM products p WHERE p.category_id = c.id AND p.active = 1)
-       ORDER BY c.name`,
-    )
-    .all(store.id) as (Category & { cover: string | null })[];
+  const [products, allCategories] = await Promise.all([
+    listProducts(store.id, { activeOnly: true }),
+    listCategories(store.id),
+  ]);
+  const featured = products.filter((p) => p.featured).slice(0, 8);
+  const latest = products.slice(0, 12);
+  const categories = allCategories
+    .map((c) => {
+      const inCat = products.filter((p) => p.category_id === c.id);
+      return { ...c, count: inCat.length, cover: inCat.find((p) => p.image_url)?.image_url ?? null };
+    })
+    .filter((c) => c.count > 0);
 
   return (
     <>

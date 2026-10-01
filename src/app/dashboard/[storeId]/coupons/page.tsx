@@ -2,8 +2,7 @@ import { ActionForm } from "@/components/action-form";
 import { ConfirmButton, SubmitButton } from "@/components/form";
 import { createCoupon, deleteCoupon, toggleCoupon } from "@/lib/actions/catalog";
 import { requireStore } from "@/lib/auth";
-import { db } from "@/lib/db";
-import type { Coupon } from "@/lib/types";
+import { listCoupons } from "@/lib/data";
 import { formatMoney } from "@/lib/utils";
 
 export const metadata = { title: "Coupons" };
@@ -11,7 +10,7 @@ export const metadata = { title: "Coupons" };
 export default async function CouponsPage({ params }: { params: Promise<{ storeId: string }> }) {
   const { storeId } = await params;
   const { store } = await requireStore(storeId);
-  const coupons = db.prepare("SELECT * FROM coupons WHERE store_id = ? ORDER BY created_at DESC").all(store.id) as Coupon[];
+  const coupons = await listCoupons(store.id);
 
   return (
     <div className="max-w-4xl space-y-6">

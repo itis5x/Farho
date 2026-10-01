@@ -1,13 +1,13 @@
 export type User = {
-  id: number;
+  id: string;
   name: string;
   email: string;
   created_at: string;
 };
 
 export type Store = {
-  id: number;
-  owner_id: number;
+  id: string;
+  owner_id: string;
   name: string;
   slug: string;
   tagline: string;
@@ -20,9 +20,9 @@ export type Store = {
   theme: Theme;
   primary_color: string;
   font: FontChoice;
-  show_categories: number;
-  show_featured: number;
-  show_about: number;
+  show_categories: boolean;
+  show_featured: boolean;
+  show_about: boolean;
   currency: string;
   delivery_charge: number;
   free_delivery_over: number;
@@ -32,17 +32,17 @@ export type Store = {
   facebook_url: string;
   instagram_url: string;
   tiktok_url: string;
-  published: number;
+  published: boolean;
   next_order_number: number;
   created_at: string;
 };
 
-export type Category = { id: number; store_id: number; name: string; slug: string };
+export type Category = { id: string; store_id: string; name: string; slug: string };
 
 export type Product = {
-  id: number;
-  store_id: number;
-  category_id: number | null;
+  id: string;
+  store_id: string;
+  category_id: string;
   name: string;
   slug: string;
   description: string;
@@ -51,14 +51,14 @@ export type Product = {
   image_url: string;
   sku: string;
   stock: number | null;
-  active: number;
-  featured: number;
+  active: boolean;
+  featured: boolean;
   created_at: string;
 };
 
 export type Customer = {
-  id: number;
-  store_id: number;
+  id: string;
+  store_id: string;
   name: string;
   phone: string;
   email: string;
@@ -68,13 +68,13 @@ export type Customer = {
 };
 
 export type Coupon = {
-  id: number;
-  store_id: number;
+  id: string;
+  store_id: string;
   code: string;
   kind: "percent" | "fixed";
   value: number;
   min_subtotal: number;
-  active: number;
+  active: boolean;
   times_used: number;
   created_at: string;
 };
@@ -93,11 +93,11 @@ export const PAYMENT_STATUSES = ["unpaid", "paid", "refunded"] as const;
 export type PaymentStatus = (typeof PAYMENT_STATUSES)[number];
 
 export type Order = {
-  id: number;
-  store_id: number;
+  id: string;
+  store_id: string;
   number: number;
   public_token: string;
-  customer_id: number | null;
+  customer_id: string;
   customer_name: string;
   phone: string;
   email: string;
@@ -117,9 +117,10 @@ export type Order = {
 };
 
 export type OrderItem = {
-  id: number;
-  order_id: number;
-  product_id: number | null;
+  id: string;
+  store_id: string;
+  order_id: string;
+  product_id: string;
   name: string;
   image_url: string;
   price: number;
@@ -127,8 +128,9 @@ export type OrderItem = {
 };
 
 export type OrderEvent = {
-  id: number;
-  order_id: number;
+  id: string;
+  store_id: string;
+  order_id: string;
   kind: string;
   message: string;
   created_at: string;

@@ -2,7 +2,8 @@ import Link from "next/link";
 import { Logo } from "@/components/logo";
 import { UserMenu } from "@/components/user-menu";
 import { requireUser } from "@/lib/auth";
-import { db } from "@/lib/db";
+import { countProducts, listOrders, listStoresByOwner } from "@/lib/data";
+import { Query } from "@/lib/appwrite";
 import type { Store } from "@/lib/types";
 import { formatMoney, storeUrl } from "@/lib/utils";
 
@@ -12,16 +13,21 @@ type StoreRow = Store & { order_count: number; pending_count: number; revenue: n
 
 export default async function StoresPage() {
   const user = await requireUser();
-  const stores = db
-    .prepare(
-      `SELECT s.*,
-        (SELECT COUNT(*) FROM orders o WHERE o.store_id = s.id) AS order_count,
-        (SELECT COUNT(*) FROM orders o WHERE o.store_id = s.id AND o.status = 'pending') AS pending_count,
-        (SELECT COALESCE(SUM(total), 0) FROM orders o WHERE o.store_id = s.id AND o.status != 'cancelled') AS revenue,
-        (SELECT COUNT(*) FROM products p WHERE p.store_id = s.id) AS product_count
-       FROM stores s WHERE s.owner_id = ? ORDER BY s.created_at DESC`,
-    )
-    .all(user.id) as StoreRow[];
+  const stores: StoreRow[] = await Promise.all(
+    (await listStoresByOwner(user.id)).map(async (s) => {
+      const [orders, product_count] = await Promise.all([
+        listOrders(s.id, [Query.select(["$id", "status", "total", "created_at"])]),
+        countProducts(s.id),
+      ]);
+      return {
+        ...s,
+        order_count: orders.length,
+        pending_count: orders.filter((o) => o.status === "pending").length,
+        revenue: orders.filter((o) => o.status !== "cancelled").reduce((sum, o) => sum + o.total, 0),
+        product_count,
+      };
+    }),
+  );
 
   return (
     <>

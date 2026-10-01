@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { StatusBadge } from "@/components/status-badge";
 import { requireStore } from "@/lib/auth";
-import { db } from "@/lib/db";
+import { listOrderItems, listOrders, pageOrders } from "@/lib/data";
+import { Query } from "@/lib/appwrite";
 import { ORDER_STATUSES, type Order } from "@/lib/types";
 import { cn, formatDate, formatMoney } from "@/lib/utils";
 
@@ -23,33 +24,38 @@ export default async function OrdersPage({
   const q = (sp.q ?? "").trim();
   const page = Math.max(1, Number(sp.page) || 1);
 
-  const where = ["store_id = ?"];
-  const args: (string | number)[] = [store.id];
-  if (status) {
-    where.push("status = ?");
-    args.push(status);
+  const statusFilter = status ? [Query.equal("status", status)] : [];
+  const offset = (page - 1) * PAGE_SIZE;
+  const [allStatuses, pageResult] = await Promise.all([
+    listOrders(store.id, [Query.select(["$id", "status", "number", "customer_name", "phone", "created_at"])]),
+    q ? null : pageOrders(store.id, statusFilter, PAGE_SIZE, offset),
+  ]);
+  let total: number;
+  let pageRows: Order[];
+  if (pageResult) {
+    total = pageResult.total;
+    pageRows = pageResult.rows;
+  } else {
+    // Search across name, phone and order number.
+    const needle = q.toLowerCase().replace(/^#/, "");
+    const hits = new Set(
+      allStatuses
+        .filter((o) => (!status || o.status === status))
+        .filter((o) => o.customer_name.toLowerCase().includes(needle) || o.phone.includes(needle) || String(o.number) === needle)
+        .map((o) => o.id),
+    );
+    const matched = hits.size ? await listOrders(store.id, [Query.equal("$id", [...hits].slice(0, 100))]) : [];
+    total = matched.length;
+    pageRows = matched.slice(offset, offset + PAGE_SIZE);
   }
-  if (q) {
-    where.push("(customer_name LIKE ? OR phone LIKE ? OR CAST(number AS TEXT) = ?)");
-    args.push(`%${q}%`, `%${q}%`, q.replace(/^#/, ""));
-  }
-  const whereSql = where.join(" AND ");
-  const { total } = db.prepare(`SELECT COUNT(*) AS total FROM orders WHERE ${whereSql}`).get(...args) as { total: number };
-  const orders = db
-    .prepare(
-      `SELECT o.*, (SELECT SUM(quantity) FROM order_items WHERE order_id = o.id) AS item_count
-       FROM orders o WHERE ${whereSql} ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?`,
-    )
-    .all(...args, PAGE_SIZE, (page - 1) * PAGE_SIZE) as (Order & { item_count: number })[];
-  const counts = Object.fromEntries(
-    (
-      db.prepare("SELECT status, COUNT(*) AS n FROM orders WHERE store_id = ? GROUP BY status").all(store.id) as {
-        status: string;
-        n: number;
-      }[]
-    ).map((r) => [r.status, r.n]),
-  );
-  const allCount = Object.values(counts).reduce((a, b) => a + b, 0);
+  const items = await listOrderItems(pageRows.map((o) => o.id));
+  const orders = pageRows.map((o) => ({
+    ...o,
+    item_count: items.filter((it) => it.order_id === o.id).reduce((s, it) => s + it.quantity, 0),
+  }));
+  const counts: Record<string, number> = {};
+  for (const o of allStatuses) counts[o.status] = (counts[o.status] ?? 0) + 1;
+  const allCount = allStatuses.length;
   const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   const href = (overrides: Record<string, string | number>) => {

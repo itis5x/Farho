@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { db } from "@/lib/db";
+import { findOrderByNumberAndPhone } from "@/lib/data";
 import { getStorefront } from "@/lib/store-data";
 import { THEME_STYLES } from "@/lib/storefront";
 import { cn } from "@/lib/utils";
@@ -22,9 +22,7 @@ export default async function TrackPage({
   if (sp.number && sp.phone) {
     const number = Number(sp.number.replace(/^#/, ""));
     const phone = sp.phone.replace(/[\s-]/g, "");
-    const row = db
-      .prepare("SELECT public_token FROM orders WHERE store_id = ? AND number = ? AND phone = ?")
-      .get(store.id, number, phone) as { public_token: string } | undefined;
+    const row = Number.isInteger(number) ? await findOrderByNumberAndPhone(store.id, number, phone) : null;
     if (row) redirect(`/store/${store.slug}/order/${row.public_token}`);
     notFoundMsg = true;
   }

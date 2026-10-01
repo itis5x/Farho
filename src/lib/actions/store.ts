@@ -3,8 +3,9 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
+import { isConflict } from "@/lib/appwrite";
 import { requireStore, requireUser } from "@/lib/auth";
-import { db } from "@/lib/db";
+import { createStoreRow, deleteStoreCascade, getStoreBySlug, updateStoreRow } from "@/lib/data";
 import { FONTS, THEMES, type FormState } from "@/lib/types";
 import { resolveImage } from "@/lib/uploads";
 import { RESERVED_SLUGS, slugify } from "@/lib/utils";
@@ -31,30 +32,30 @@ export async function createStore(_prev: FormState, form: FormData): Promise<For
   const d = parsed.data;
 
   if (RESERVED_SLUGS.has(d.slug)) return { error: "That store address is reserved. Try another." };
-  if (db.prepare("SELECT 1 FROM stores WHERE slug = ?").get(d.slug)) {
-    return { error: "That store address is already taken. Try another." };
-  }
+  if (await getStoreBySlug(d.slug)) return { error: "That store address is already taken. Try another." };
 
-  const { lastInsertRowid } = db
-    .prepare(
-      `INSERT INTO stores (owner_id, name, slug, tagline, theme, primary_color, hero_title, hero_subtitle, about)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    )
-    .run(
-      user.id,
-      d.name,
-      d.slug,
-      d.tagline,
-      d.theme,
-      d.primary_color,
-      `Welcome to ${d.name}`,
-      d.tagline || "Discover products you'll love.",
-      `${d.name} is an online store powered by Farho.`,
-    );
-  redirect(`/dashboard/${lastInsertRowid}?welcome=1`);
+  let storeId: string;
+  try {
+    const store = await createStoreRow({
+      owner_id: user.id,
+      name: d.name,
+      slug: d.slug,
+      tagline: d.tagline,
+      theme: d.theme,
+      primary_color: d.primary_color,
+      hero_title: `Welcome to ${d.name}`,
+      hero_subtitle: d.tagline || "Discover products you'll love.",
+      about: `${d.name} is an online store powered by Farho.`,
+    });
+    storeId = store.id;
+  } catch (e) {
+    if (isConflict(e)) return { error: "That store address is already taken. Try another." };
+    throw e;
+  }
+  redirect(`/dashboard/${storeId}?welcome=1`);
 }
 
-const bool = z.preprocess((v) => (v === "on" || v === "1" ? 1 : 0), z.number());
+const bool = z.preprocess((v) => v === "on" || v === "1", z.boolean());
 
 const designSchema = z.object({
   theme: z.enum(THEMES),
@@ -70,7 +71,7 @@ const designSchema = z.object({
   show_about: bool,
 });
 
-export async function updateDesign(storeId: number, _prev: FormState, form: FormData): Promise<FormState> {
+export async function updateDesign(storeId: string, _prev: FormState, form: FormData): Promise<FormState> {
   const { store } = await requireStore(storeId);
   const parsed = designSchema.safeParse(Object.fromEntries(form));
   if (!parsed.success) return { error: parsed.error.issues[0].message };
@@ -81,26 +82,7 @@ export async function updateDesign(storeId: number, _prev: FormState, form: Form
   } catch (e) {
     return { error: (e as Error).message };
   }
-  const d = parsed.data;
-  db.prepare(
-    `UPDATE stores SET theme=?, font=?, primary_color=?, tagline=?, hero_title=?, hero_subtitle=?, announcement=?,
-       about=?, show_categories=?, show_featured=?, show_about=?, logo_url=?, hero_image_url=? WHERE id=?`,
-  ).run(
-    d.theme,
-    d.font,
-    d.primary_color,
-    d.tagline,
-    d.hero_title,
-    d.hero_subtitle,
-    d.announcement,
-    d.about,
-    d.show_categories,
-    d.show_featured,
-    d.show_about,
-    logo,
-    hero,
-    store.id,
-  );
+  await updateStoreRow(store.id, { ...parsed.data, logo_url: logo, hero_image_url: hero });
   revalidatePath(`/store/${store.slug}`, "layout");
   revalidatePath(`/dashboard/${store.id}`, "layout");
   return { ok: "Design saved. Your website has been updated." };
@@ -127,38 +109,21 @@ const settingsSchema = z.object({
   published: bool,
 });
 
-export async function updateSettings(storeId: number, _prev: FormState, form: FormData): Promise<FormState> {
+export async function updateSettings(storeId: string, _prev: FormState, form: FormData): Promise<FormState> {
   const { store } = await requireStore(storeId);
   const parsed = settingsSchema.safeParse(Object.fromEntries(form));
   if (!parsed.success) return { error: parsed.error.issues[0].message };
-  const d = parsed.data;
-  db.prepare(
-    `UPDATE stores SET name=?, currency=?, delivery_charge=?, free_delivery_over=?, contact_phone=?, contact_email=?,
-       address=?, facebook_url=?, instagram_url=?, tiktok_url=?, published=? WHERE id=?`,
-  ).run(
-    d.name,
-    d.currency,
-    d.delivery_charge,
-    d.free_delivery_over,
-    d.contact_phone,
-    d.contact_email,
-    d.address,
-    d.facebook_url,
-    d.instagram_url,
-    d.tiktok_url,
-    d.published,
-    store.id,
-  );
+  await updateStoreRow(store.id, parsed.data);
   revalidatePath(`/store/${store.slug}`, "layout");
   revalidatePath(`/dashboard/${store.id}`, "layout");
   return { ok: "Settings saved." };
 }
 
-export async function deleteStore(storeId: number, form: FormData) {
+export async function deleteStore(storeId: string, form: FormData) {
   const { store } = await requireStore(storeId);
   if (String(form.get("confirm") ?? "").trim() !== store.slug) {
     redirect(`/dashboard/${store.id}/settings?error=confirm`);
   }
-  db.prepare("DELETE FROM stores WHERE id = ?").run(store.id);
+  await deleteStoreCascade(store.id);
   redirect("/dashboard");
 }

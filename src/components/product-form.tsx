@@ -12,7 +12,7 @@ export function ProductForm({
   categories,
   currency,
 }: {
-  storeId: number;
+  storeId: string;
   product?: Product;
   categories: Category[];
   currency: string;

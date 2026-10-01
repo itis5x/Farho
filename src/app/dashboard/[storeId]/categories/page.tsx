@@ -2,20 +2,15 @@ import { ActionForm } from "@/components/action-form";
 import { ConfirmButton, SubmitButton } from "@/components/form";
 import { createCategory, deleteCategory, renameCategory } from "@/lib/actions/catalog";
 import { requireStore } from "@/lib/auth";
-import { db } from "@/lib/db";
-import type { Category } from "@/lib/types";
+import { listCategories, listProducts } from "@/lib/data";
 
 export const metadata = { title: "Categories" };
 
 export default async function CategoriesPage({ params }: { params: Promise<{ storeId: string }> }) {
   const { storeId } = await params;
   const { store } = await requireStore(storeId);
-  const categories = db
-    .prepare(
-      `SELECT c.*, (SELECT COUNT(*) FROM products p WHERE p.category_id = c.id) AS product_count
-       FROM categories c WHERE c.store_id = ? ORDER BY c.name`,
-    )
-    .all(store.id) as (Category & { product_count: number })[];
+  const [cats, products] = await Promise.all([listCategories(store.id), listProducts(store.id)]);
+  const categories = cats.map((c) => ({ ...c, product_count: products.filter((p) => p.category_id === c.id).length }));
 
   return (
     <div className="max-w-3xl space-y-6">

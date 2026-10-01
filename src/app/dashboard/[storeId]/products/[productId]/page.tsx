@@ -4,8 +4,7 @@ import { ConfirmButton } from "@/components/form";
 import { ProductForm } from "@/components/product-form";
 import { deleteProduct } from "@/lib/actions/catalog";
 import { requireStore } from "@/lib/auth";
-import { db } from "@/lib/db";
-import type { Category, Product } from "@/lib/types";
+import { getProduct, listCategories } from "@/lib/data";
 
 export const metadata = { title: "Edit product" };
 
@@ -16,11 +15,8 @@ export default async function EditProductPage({
 }) {
   const { storeId, productId } = await params;
   const { store } = await requireStore(storeId);
-  const product = db
-    .prepare("SELECT * FROM products WHERE id = ? AND store_id = ?")
-    .get(Number(productId), store.id) as Product | undefined;
+  const [product, categories] = await Promise.all([getProduct(store.id, productId), listCategories(store.id)]);
   if (!product) notFound();
-  const categories = db.prepare("SELECT * FROM categories WHERE store_id = ? ORDER BY name").all(store.id) as Category[];
 
   return (
     <div className="space-y-6">

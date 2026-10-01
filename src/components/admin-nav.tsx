@@ -15,7 +15,7 @@ const ITEMS = [
   { href: "/settings", label: "Settings", icon: "⚙️" },
 ];
 
-export function AdminNav({ storeId, pending }: { storeId: number; pending: number }) {
+export function AdminNav({ storeId, pending }: { storeId: string; pending: number }) {
   const pathname = usePathname();
   const base = `/dashboard/${storeId}`;
   return (

@@ -5,8 +5,8 @@ import { SubmitButton } from "@/components/form";
 import { StatusBadge } from "@/components/status-badge";
 import { addOrderNote, updateOrderStatus, updatePaymentStatus } from "@/lib/actions/orders";
 import { requireStore } from "@/lib/auth";
-import { db } from "@/lib/db";
-import { ORDER_STATUSES, PAYMENT_STATUSES, type Order, type OrderEvent, type OrderItem } from "@/lib/types";
+import { getOrder, listOrderEvents, listOrderItems, listOrdersByCustomer } from "@/lib/data";
+import { ORDER_STATUSES, PAYMENT_STATUSES } from "@/lib/types";
 import { cn, formatDate, formatMoney } from "@/lib/utils";
 
 export const metadata = { title: "Order" };
@@ -16,19 +16,15 @@ const FLOW = ["pending", "confirmed", "processing", "shipped", "delivered"] as c
 export default async function OrderPage({ params }: { params: Promise<{ storeId: string; orderId: string }> }) {
   const { storeId, orderId } = await params;
   const { store } = await requireStore(storeId);
-  const order = db
-    .prepare("SELECT * FROM orders WHERE id = ? AND store_id = ?")
-    .get(Number(orderId), store.id) as Order | undefined;
+  const order = await getOrder(store.id, orderId);
   if (!order) notFound();
-  const items = db.prepare("SELECT * FROM order_items WHERE order_id = ?").all(order.id) as OrderItem[];
-  const events = db
-    .prepare("SELECT * FROM order_events WHERE order_id = ? ORDER BY created_at DESC, id DESC")
-    .all(order.id) as OrderEvent[];
-  const history = order.customer_id
-    ? (db
-        .prepare("SELECT COUNT(*) AS n, COALESCE(SUM(total),0) AS spent FROM orders WHERE customer_id = ? AND status != 'cancelled'")
-        .get(order.customer_id) as { n: number; spent: number })
-    : null;
+  const [items, events, customerOrders] = await Promise.all([
+    listOrderItems([order.id]),
+    listOrderEvents(order.id),
+    order.customer_id ? listOrdersByCustomer(order.customer_id) : Promise.resolve([]),
+  ]);
+  const live = customerOrders.filter((o) => o.status !== "cancelled");
+  const history = order.customer_id ? { n: live.length, spent: live.reduce((s, o) => s + o.total, 0) } : null;
   const money = (n: number) => formatMoney(n, store.currency);
   const stepIndex = FLOW.indexOf(order.status as (typeof FLOW)[number]);
   const nextStatus = stepIndex >= 0 && stepIndex < FLOW.length - 1 ? FLOW[stepIndex + 1] : null;
