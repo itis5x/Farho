@@ -66,6 +66,10 @@ export async function deleteStoreCascade(storeId: string) {
   const byStore = [Query.equal("store_id", storeId)];
   await Promise.all([
     deleteRowsWhere(TABLES.storeSecrets, byStore),
+    deleteRowsWhere(TABLES.messages, byStore),
+    deleteRowsWhere(TABLES.conversations, byStore),
+    deleteRowsWhere(TABLES.channels, byStore),
+    deleteRowsWhere(TABLES.autoReplies, byStore),
     deleteRowsWhere(TABLES.ledger, byStore),
     deleteRowsWhere(TABLES.orderEvents, byStore),
     deleteRowsWhere(TABLES.orderItems, byStore),
@@ -232,6 +236,9 @@ export const getOrderByToken = (storeId: string, token: string) =>
 
 export const getOrderByPublicToken = (token: string) =>
   /^[a-f0-9]{32}$/.test(token) ? firstRow<Order>(TABLES.orders, [Query.equal("public_token", token)]) : Promise.resolve(null);
+
+export const findOrderByNumber = (storeId: string, number: number) =>
+  firstRow<Order>(TABLES.orders, [Query.equal("store_id", storeId), Query.equal("number", number)]);
 
 export const findOrderByNumberAndPhone = (storeId: string, number: number, phone: string) =>
   firstRow<Order>(TABLES.orders, [Query.equal("store_id", storeId), Query.equal("number", number), Query.equal("phone", phone)]);

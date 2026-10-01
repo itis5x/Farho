@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { CartButton, CartProvider } from "@/components/storefront/cart";
+import { ChatWidget } from "@/components/storefront/chat-widget";
 import { getStorefront } from "@/lib/store-data";
 import { FONT_CLASS, THEME_STYLES } from "@/lib/storefront";
 import { cn } from "@/lib/utils";
@@ -87,6 +88,7 @@ export default async function StorefrontLayout({
         </header>
 
         <main className="flex-1">{children}</main>
+        {store.published && <ChatWidget storeSlug={store.slug} storeName={store.name} />}
 
         <footer className="mt-16 border-t border-zinc-200 bg-zinc-50">
           <div className="mx-auto grid max-w-6xl gap-8 px-4 py-10 text-sm sm:grid-cols-3">

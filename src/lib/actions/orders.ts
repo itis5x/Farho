@@ -1,34 +1,16 @@
 "use server";
 
-import crypto from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { createRow, decrementColumn, getRow, incrementColumn, isNotFound, updateRow } from "@/lib/appwrite";
+import { decrementColumn, getRow, incrementColumn, isNotFound, updateRow } from "@/lib/appwrite";
 import { TABLES } from "@/lib/appwrite-schema";
 import { requireStore } from "@/lib/auth";
-import {
-  addOrderEvent,
-  getCouponByCode,
-  getOrder,
-  getOrderByToken,
-  getProduct,
-  getStoreBySlug,
-  listOrderItems,
-  updateOrderRow,
-  upsertCustomer,
-} from "@/lib/data";
-import {
-  ORDER_STATUSES,
-  PAYMENT_STATUSES,
-  type Coupon,
-  type Order,
-  type Product,
-  type Store,
-} from "@/lib/types";
+import { addOrderEvent, getOrder, getOrderByToken, getStoreBySlug, listOrderItems, updateOrderRow } from "@/lib/data";
+import { createOrder, priceCart, type CartLine } from "@/lib/orders";
 import { availableMethods, startOnlinePayment, type PaymentStart } from "@/lib/payments/service";
 import { MANUAL_METHODS, ONLINE_METHODS, PAYMENT_METHODS, type PaymentMethod } from "@/lib/payments/settings";
+import { ORDER_STATUSES, PAYMENT_STATUSES, type Product } from "@/lib/types";
 import { resolveImage } from "@/lib/uploads";
-import { formatMoney } from "@/lib/utils";
 
 /* ----------------------------- Admin actions ----------------------------- */
 
@@ -91,58 +73,7 @@ export async function addOrderNote(storeId: string, orderId: string, form: FormD
 
 /* --------------------------- Storefront checkout -------------------------- */
 
-export type CartLine = { productId: string; quantity: number };
-
-type Priced = {
-  lines: { product: Product; quantity: number }[];
-  subtotal: number;
-  discount: number;
-  delivery: number;
-  total: number;
-  coupon: Coupon | null;
-  couponError?: string;
-};
-
-async function priceCart(store: Store, cart: CartLine[], couponCode: string): Promise<Priced | { error: string }> {
-  const products = await Promise.all(cart.map((l) => getProduct(store.id, l.productId)));
-  const lines: Priced["lines"] = [];
-  for (const [i, line] of cart.entries()) {
-    const product = products[i];
-    if (!product || !product.active) return { error: "One of the items in your cart is no longer available." };
-    if (product.stock != null && product.stock < line.quantity) {
-      return {
-        error:
-          product.stock === 0
-            ? `“${product.name}” is sold out.`
-            : `Only ${product.stock} of “${product.name}” left in stock.`,
-      };
-    }
-    lines.push({ product, quantity: line.quantity });
-  }
-  if (lines.length === 0) return { error: "Your cart is empty." };
-
-  const subtotal = round(lines.reduce((s, l) => s + l.product.price * l.quantity, 0));
-  let discount = 0;
-  let coupon: Coupon | null = null;
-  let couponError: string | undefined;
-  if (couponCode) {
-    const c = await getCouponByCode(store.id, couponCode);
-    if (!c || !c.active) couponError = "That coupon code isn't valid.";
-    else if (subtotal < c.min_subtotal)
-      couponError = `This coupon needs a minimum order of ${formatMoney(c.min_subtotal, store.currency)}.`;
-    else {
-      coupon = c;
-      discount = c.kind === "percent" ? (subtotal * c.value) / 100 : c.value;
-      discount = Math.min(subtotal, round(discount));
-    }
-  }
-  const freeDelivery = store.free_delivery_over > 0 && subtotal - discount >= store.free_delivery_over;
-  const delivery = freeDelivery ? 0 : store.delivery_charge;
-  return { lines, subtotal, discount, delivery, total: round(subtotal - discount + delivery), coupon, couponError };
-}
-
-const round = (n: number) => Math.round(n * 100) / 100;
-
+export type { CartLine } from "@/lib/orders";
 const cartSchema = z
   .array(z.object({ productId: z.string().regex(/^[a-zA-Z0-9._-]{1,36}$/), quantity: z.number().int().min(1).max(99) }))
   .max(30)
@@ -210,93 +141,25 @@ export async function placeOrder(
     }
   }
 
-  const priced = await priceCart(store, cart.data, d.coupon);
-  if ("error" in priced) return { error: priced.error };
-  if (d.coupon && priced.couponError) return { error: priced.couponError };
-
-  // Reserve stock with atomic decrements; undo everything if any step fails.
-  const reserved: { id: string; qty: number }[] = [];
-  const release = () =>
-    Promise.all(reserved.map((r) => incrementColumn(TABLES.products, r.id, "stock", r.qty).catch(() => undefined)));
-
-  try {
-    for (const { product, quantity } of priced.lines) {
-      if (product.stock == null) continue;
-      let left: number | null;
-      try {
-        left = (await decrementColumn<Product>(TABLES.products, product.id, "stock", quantity, 0)).stock;
-      } catch {
-        left = -1;
-      }
-      if (left === -1 || (left != null && left < 0)) {
-        if (left != null && left < 0) reserved.push({ id: product.id, qty: quantity });
-        await release();
-        return { error: `Sorry, “${product.name}” just sold out or doesn't have enough stock left.` };
-      }
-      reserved.push({ id: product.id, qty: quantity });
-    }
-
-    const phone = d.phone.replace(/[\s-]/g, "");
-    const [customer, storeRow] = await Promise.all([
-      upsertCustomer(store.id, { name: d.customer_name, phone, email: d.email, address: d.address, city: d.city }),
-      incrementColumn<Store>(TABLES.stores, store.id, "next_order_number", 1),
-    ]);
-    const publicToken = crypto.randomBytes(16).toString("hex");
-    const order = await createRow<Order>(TABLES.orders, {
-      store_id: store.id,
-      number: storeRow.next_order_number - 1,
-      public_token: publicToken,
-      customer_id: customer.id,
-      customer_name: d.customer_name,
-      phone,
-      email: d.email,
-      address: d.address,
-      city: d.city,
-      note: d.note,
-      subtotal: priced.subtotal,
-      discount: priced.discount,
-      coupon_code: priced.coupon?.code ?? "",
-      delivery_charge: priced.delivery,
-      total: priced.total,
-      payment_method: d.payment_method,
-      payment_ref: manual ? d.payment_ref : "",
-      payment_proof_url: proofUrl,
-      created_at: new Date().toISOString(),
-    });
-
-    await Promise.all([
-      ...priced.lines.map(({ product, quantity }) =>
-        createRow(TABLES.orderItems, {
-          store_id: store.id,
-          order_id: order.id,
-          product_id: product.id,
-          name: product.name,
-          image_url: product.image_url,
-          price: product.price,
-          quantity,
-        }),
-      ),
-      addOrderEvent(
-        store.id,
-        order.id,
-        "status",
-        manual
-          ? `Order placed — customer says they paid by ${d.payment_method === "qr" ? "QR" : "bank transfer"} (ref ${d.payment_ref}). Please verify.`
-          : "Order placed by customer",
-      ),
-      priced.coupon ? incrementColumn(TABLES.coupons, priced.coupon.id, "times_used", 1) : null,
-    ]);
-
-    revalidatePath(`/store/${store.slug}`, "layout");
-    revalidatePath(`/dashboard/${store.id}`, "layout");
-    if (ONLINE_METHODS.includes(d.payment_method)) {
-      return { token: publicToken, payment: await startOnlinePayment(store, order) };
-    }
-    return { token: publicToken };
-  } catch (e) {
-    await release();
-    throw e;
+  const result = await createOrder({
+    store,
+    cart: cart.data,
+    customer: { name: d.customer_name, phone: d.phone, email: d.email, address: d.address, city: d.city },
+    note: d.note,
+    couponCode: d.coupon,
+    paymentMethod: d.payment_method,
+    paymentRef: manual ? d.payment_ref : "",
+    paymentProofUrl: proofUrl,
+    source: "website",
+    event: manual
+      ? `Order placed — customer says they paid by ${d.payment_method === "qr" ? "QR" : "bank transfer"} (ref ${d.payment_ref}). Please verify.`
+      : "Order placed by customer",
+  });
+  if ("error" in result) return { error: result.error };
+  if (ONLINE_METHODS.includes(d.payment_method)) {
+    return { token: result.order.public_token, payment: await startOnlinePayment(store, result.order) };
   }
+  return { token: result.order.public_token };
 }
 
 /** Starts (or retries) an online payment for an unpaid order from the customer's order page. */

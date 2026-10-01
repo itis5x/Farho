@@ -4,6 +4,7 @@ import { Logo } from "@/components/logo";
 import { UserMenu } from "@/components/user-menu";
 import { requireStore } from "@/lib/auth";
 import { countOrders } from "@/lib/data";
+import { listConversations } from "@/lib/inbox/data";
 import { Query } from "@/lib/appwrite";
 import { storeUrl } from "@/lib/utils";
 
@@ -16,7 +17,11 @@ export default async function StoreAdminLayout({
 }) {
   const { storeId } = await params;
   const { user, store } = await requireStore(storeId);
-  const pending = await countOrders(store.id, [Query.equal("status", "pending")]);
+  const [pending, conversations] = await Promise.all([
+    countOrders(store.id, [Query.equal("status", "pending")]),
+    listConversations(store.id),
+  ]);
+  const unread = conversations.reduce((s, c) => s + (c.unread > 0 ? 1 : 0), 0);
 
   return (
     <div className="flex min-h-screen flex-col lg:flex-row">
@@ -42,7 +47,7 @@ export default async function StoreAdminLayout({
             </Link>
           </div>
         </div>
-        <AdminNav storeId={store.id} pending={pending} />
+        <AdminNav storeId={store.id} pending={pending} unread={unread} />
         <div className="hidden px-5 py-4 lg:block">
           <a href={storeUrl(store.slug)} target="_blank" className="btn-secondary w-full">
             View website ↗

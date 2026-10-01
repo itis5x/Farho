@@ -1,9 +1,10 @@
 import Link from "next/link";
+import { ChannelIcon } from "@/components/channel-icon";
 import { StatusBadge } from "@/components/status-badge";
 import { requireStore } from "@/lib/auth";
 import { listOrderItems, listOrders, pageOrders } from "@/lib/data";
 import { Query } from "@/lib/appwrite";
-import { ORDER_STATUSES, type Order } from "@/lib/types";
+import { ORDER_STATUSES, type ChannelKind, type Order } from "@/lib/types";
 import { cn, formatDate, formatMoney } from "@/lib/utils";
 
 export const metadata = { title: "Orders" };
@@ -123,6 +124,9 @@ export default async function OrdersPage({
                   <Link href={`/dashboard/${store.id}/orders/${o.id}`} className="after:absolute after:inset-0">
                     #{o.number}
                   </Link>
+                  {o.source && o.source !== "website" && o.source !== "manual" && o.source !== "pos" && (
+                    <ChannelIcon kind={o.source === "chat" ? "web" : (o.source as ChannelKind)} className="ml-2 inline-grid h-5 w-5 align-middle" />
+                  )}
                 </td>
                 <td className="px-4 py-3 text-zinc-600">{formatDate(o.created_at)}</td>
                 <td className="px-4 py-3">

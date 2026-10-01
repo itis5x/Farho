@@ -17,6 +17,10 @@ export const TABLES = {
   orderEvents: "order_events",
   storeSecrets: "store_secrets",
   ledger: "ledger",
+  channels: "channels",
+  conversations: "conversations",
+  messages: "messages",
+  autoReplies: "auto_replies",
 } as const;
 
 export type ColumnDef =
@@ -89,6 +93,8 @@ export const SCHEMA: TableDef[] = [
       { key: "next_order_number", type: "integer", default: 1001 },
       // JSON: which payment methods the store offers (see src/lib/payments/settings.ts).
       { key: "payments", type: "text" },
+      // JSON: inbox/assistant settings (see src/lib/inbox/settings.ts).
+      { key: "inbox", type: "text" },
     ],
     indexes: [
       { key: "slug_unique", type: "unique", columns: ["slug"] },
@@ -174,6 +180,7 @@ export const SCHEMA: TableDef[] = [
       v("payment_proof_url", 500),
       v("payment_gateway_mode", 10),
       { key: "paid_at", type: "datetime" },
+      v("source", 20, { default: "website" }),
       { key: "payment_status", type: "enum", elements: ["unpaid", "paid", "refunded"], default: "unpaid" },
       {
         key: "status",
@@ -243,5 +250,68 @@ export const SCHEMA: TableDef[] = [
       { key: "created_at", type: "datetime", required: true },
     ],
     indexes: [{ key: "store_created_idx", type: "key", columns: ["store_id", "created_at"], orders: ["ASC", "DESC"] }],
+  },
+  {
+    id: TABLES.channels,
+    name: "Channels",
+    // A connected messaging account. Its access tokens live in store_secrets under kind "channel:<id>".
+    columns: [
+      v("store_id", 36, { required: true }),
+      { key: "kind", type: "enum", elements: ["web", "messenger", "instagram", "whatsapp", "telegram"], required: true },
+      v("name", 120),
+      v("external_id", 64),
+      { key: "active", type: "boolean", default: true },
+    ],
+    indexes: [
+      { key: "store_idx", type: "key", columns: ["store_id"] },
+      { key: "kind_external_idx", type: "key", columns: ["kind", "external_id"] },
+    ],
+  },
+  {
+    id: TABLES.conversations,
+    name: "Conversations",
+    columns: [
+      v("store_id", 36, { required: true }),
+      v("channel_id", 36, { required: true }),
+      v("kind", 20, { required: true }),
+      v("external_user_id", 80, { required: true }),
+      v("customer_name", 120),
+      v("customer_id", 36),
+      v("last_message", 300),
+      { key: "last_at", type: "datetime", required: true },
+      { key: "unread", type: "integer", default: 0 },
+      { key: "bot_paused", type: "boolean", default: false },
+      // JSON scratchpad for the assistant (e.g. collected order details).
+      { key: "state", type: "text" },
+    ],
+    indexes: [
+      { key: "channel_user_unique", type: "unique", columns: ["channel_id", "external_user_id"] },
+      { key: "store_last_idx", type: "key", columns: ["store_id", "last_at"], orders: ["ASC", "DESC"] },
+    ],
+  },
+  {
+    id: TABLES.messages,
+    name: "Messages",
+    columns: [
+      v("store_id", 36, { required: true }),
+      v("conversation_id", 36, { required: true }),
+      { key: "direction", type: "enum", elements: ["in", "out"], required: true },
+      { key: "sender", type: "enum", elements: ["customer", "seller", "bot", "ai"], required: true },
+      { key: "text", type: "text", required: true },
+      v("external_id", 120),
+      { key: "created_at", type: "datetime", required: true },
+    ],
+    indexes: [{ key: "conversation_created_idx", type: "key", columns: ["conversation_id", "created_at"] }],
+  },
+  {
+    id: TABLES.autoReplies,
+    name: "Auto replies",
+    columns: [
+      v("store_id", 36, { required: true }),
+      v("keywords", 300, { required: true }),
+      v("reply", 1000, { required: true }),
+      { key: "active", type: "boolean", default: true },
+    ],
+    indexes: [{ key: "store_idx", type: "key", columns: ["store_id"] }],
   },
 ];

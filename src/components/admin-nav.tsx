@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 const ITEMS = [
   { href: "", label: "Overview", icon: "📊" },
   { href: "/orders", label: "Orders", icon: "📦" },
+  { href: "/inbox", label: "Inbox", icon: "💬" },
   { href: "/products", label: "Products", icon: "🏷️" },
   { href: "/categories", label: "Categories", icon: "🗂️" },
   { href: "/customers", label: "Customers", icon: "👥" },
@@ -16,7 +17,7 @@ const ITEMS = [
   { href: "/settings", label: "Settings", icon: "⚙️" },
 ];
 
-export function AdminNav({ storeId, pending }: { storeId: string; pending: number }) {
+export function AdminNav({ storeId, pending, unread = 0 }: { storeId: string; pending: number; unread?: number }) {
   const pathname = usePathname();
   const base = `/dashboard/${storeId}`;
   return (
@@ -35,6 +36,9 @@ export function AdminNav({ storeId, pending }: { storeId: string; pending: numbe
           >
             <span aria-hidden>{item.icon}</span>
             {item.label}
+            {item.href === "/inbox" && unread > 0 && (
+              <span className="ml-auto rounded-full bg-indigo-600 px-2 py-0.5 text-xs text-white">{unread}</span>
+            )}
             {item.href === "/orders" && pending > 0 && (
               <span className="ml-auto rounded-full bg-amber-500 px-2 py-0.5 text-xs text-white">{pending}</span>
             )}

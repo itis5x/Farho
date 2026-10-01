@@ -35,6 +35,7 @@ export type Store = {
   published: boolean;
   next_order_number: number;
   payments: string;
+  inbox: string;
   created_at: string;
 };
 
@@ -115,6 +116,7 @@ export type Order = {
   payment_proof_url: string;
   payment_gateway_mode: string;
   paid_at: string | null;
+  source: string;
   payment_status: PaymentStatus;
   status: OrderStatus;
   created_at: string;
@@ -159,3 +161,44 @@ export type LedgerEntry = {
   note: string;
   created_at: string;
 };
+
+export type ChannelKind = "web" | "messenger" | "instagram" | "whatsapp" | "telegram";
+
+export type Channel = {
+  id: string;
+  store_id: string;
+  kind: ChannelKind;
+  name: string;
+  external_id: string;
+  active: boolean;
+  created_at: string;
+};
+
+export type Conversation = {
+  id: string;
+  store_id: string;
+  channel_id: string;
+  kind: ChannelKind;
+  external_user_id: string;
+  customer_name: string;
+  customer_id: string;
+  last_message: string;
+  last_at: string;
+  unread: number;
+  bot_paused: boolean;
+  state: string;
+  created_at: string;
+};
+
+export type Message = {
+  id: string;
+  store_id: string;
+  conversation_id: string;
+  direction: "in" | "out";
+  sender: "customer" | "seller" | "bot" | "ai";
+  text: string;
+  external_id: string;
+  created_at: string;
+};
+
+export type AutoReply = { id: string; store_id: string; keywords: string; reply: string; active: boolean };

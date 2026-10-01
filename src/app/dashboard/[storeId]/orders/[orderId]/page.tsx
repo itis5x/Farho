@@ -124,6 +124,7 @@ export default async function OrderPage({ params }: { params: Promise<{ storeId:
                 value={`${METHOD_LABELS[order.payment_method as PaymentMethod] ?? order.payment_method}${order.payment_gateway_mode === "farho" ? " (Farho Pay)" : ""}`}
               />
               {order.payment_ref && <Row label="Payment reference" value={order.payment_ref} />}
+              <Row label="Order came from" value={SOURCE_LABELS[order.source] ?? "Website"} />
               {order.paid_at && <Row label="Paid at" value={formatDate(order.paid_at)} />}
               {order.payment_proof_url && (
                 <div className="pt-2">
@@ -242,6 +243,17 @@ export default async function OrderPage({ params }: { params: Promise<{ storeId:
     </div>
   );
 }
+
+const SOURCE_LABELS: Record<string, string> = {
+  website: "Website",
+  chat: "Website chat",
+  messenger: "Messenger",
+  instagram: "Instagram",
+  whatsapp: "WhatsApp",
+  telegram: "Telegram",
+  manual: "Added manually",
+  pos: "In-store (POS)",
+};
 
 function Row({ label, value }: { label: string; value: string }) {
   return (
