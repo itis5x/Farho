@@ -11,6 +11,7 @@ const ITEMS = [
   { href: "/categories", label: "Categories", icon: "🗂️" },
   { href: "/customers", label: "Customers", icon: "👥" },
   { href: "/coupons", label: "Coupons", icon: "🎟️" },
+  { href: "/payments", label: "Payments", icon: "💳" },
   { href: "/design", label: "Website design", icon: "🎨" },
   { href: "/settings", label: "Settings", icon: "⚙️" },
 ];

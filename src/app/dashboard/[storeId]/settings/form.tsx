@@ -1,14 +1,15 @@
 "use client";
 
 import { useActionState } from "react";
-import { FormMessage, SubmitButton } from "@/components/form";
+import { FormMessage, SubmitButton, useKeepValuesSubmit } from "@/components/form";
 import { updateSettings } from "@/lib/actions/store";
 import type { Store } from "@/lib/types";
 
 export function SettingsForm({ store }: { store: Store }) {
-  const [state, action] = useActionState(updateSettings.bind(null, store.id), undefined);
+  const [state, action, pending] = useActionState(updateSettings.bind(null, store.id), undefined);
+  const onSubmit = useKeepValuesSubmit(action);
   return (
-    <form action={action} className="space-y-6">
+    <form onSubmit={onSubmit} className="space-y-6">
       <section className="card space-y-4 p-5">
         <h2 className="font-semibold">General</h2>
         <div className="grid gap-4 sm:grid-cols-2">
@@ -65,7 +66,7 @@ export function SettingsForm({ store }: { store: Store }) {
       </section>
 
       <FormMessage state={state} />
-      <SubmitButton>Save settings</SubmitButton>
+      <SubmitButton pending={pending}>Save settings</SubmitButton>
     </form>
   );
 }

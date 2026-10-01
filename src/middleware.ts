@@ -12,7 +12,7 @@ export function middleware(req: NextRequest) {
 
   const slug = host.slice(0, -(root.length + 1));
   const { pathname } = req.nextUrl;
-  if (pathname.startsWith("/store/") || pathname.startsWith("/uploads/")) return NextResponse.next();
+  if (pathname.startsWith("/store/") || pathname.startsWith("/api/")) return NextResponse.next();
 
   const url = req.nextUrl.clone();
   url.pathname = `/store/${slug}${pathname === "/" ? "" : pathname}`;

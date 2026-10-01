@@ -15,6 +15,8 @@ export const TABLES = {
   orders: "orders",
   orderItems: "order_items",
   orderEvents: "order_events",
+  storeSecrets: "store_secrets",
+  ledger: "ledger",
 } as const;
 
 export type ColumnDef =
@@ -85,6 +87,8 @@ export const SCHEMA: TableDef[] = [
       v("tiktok_url", 250),
       { key: "published", type: "boolean", default: true },
       { key: "next_order_number", type: "integer", default: 1001 },
+      // JSON: which payment methods the store offers (see src/lib/payments/settings.ts).
+      { key: "payments", type: "text" },
     ],
     indexes: [
       { key: "slug_unique", type: "unique", columns: ["slug"] },
@@ -166,6 +170,10 @@ export const SCHEMA: TableDef[] = [
       { key: "delivery_charge", type: "float", default: 0 },
       { key: "total", type: "float", required: true },
       v("payment_method", 20, { default: "cod" }),
+      v("payment_ref", 120),
+      v("payment_proof_url", 500),
+      v("payment_gateway_mode", 10),
+      { key: "paid_at", type: "datetime" },
       { key: "payment_status", type: "enum", elements: ["unpaid", "paid", "refunded"], default: "unpaid" },
       {
         key: "status",
@@ -213,5 +221,27 @@ export const SCHEMA: TableDef[] = [
       { key: "order_idx", type: "key", columns: ["order_id"] },
       { key: "store_idx", type: "key", columns: ["store_id"] },
     ],
+  },
+  {
+    id: TABLES.storeSecrets,
+    name: "Store secrets",
+    // Merchant/courier/social credentials, AES-256-GCM encrypted by the app before storing.
+    columns: [v("store_id", 36, { required: true }), v("kind", 30, { required: true }), { key: "data", type: "text", required: true }],
+    indexes: [{ key: "store_kind_unique", type: "unique", columns: ["store_id", "kind"] }],
+  },
+  {
+    id: TABLES.ledger,
+    name: "Ledger",
+    // Money collected by Farho Pay on a store's behalf, platform fees and payouts.
+    columns: [
+      v("store_id", 36, { required: true }),
+      v("order_id", 36),
+      { key: "kind", type: "enum", elements: ["payment", "fee", "payout", "refund"], required: true },
+      { key: "amount", type: "float", required: true },
+      v("gateway", 20),
+      v("note", 300),
+      { key: "created_at", type: "datetime", required: true },
+    ],
+    indexes: [{ key: "store_created_idx", type: "key", columns: ["store_id", "created_at"], orders: ["ASC", "DESC"] }],
   },
 ];

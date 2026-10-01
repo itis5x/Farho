@@ -5,11 +5,30 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState, useTransition } from "react";
 import { useCart } from "./cart";
 import { placeOrder, quoteCart } from "@/lib/actions/orders";
+import { METHOD_LABELS, type PaymentMethod } from "@/lib/payments/settings";
+import { goToPayment } from "./submit-payment";
 import { cn, formatMoney } from "@/lib/utils";
 
 type Quote = Awaited<ReturnType<typeof quoteCart>>;
 
-export function CheckoutForm({ storeSlug, currency, buttonClass }: { storeSlug: string; currency: string; buttonClass: string }) {
+export function CheckoutForm({
+  storeSlug,
+  currency,
+  buttonClass,
+  methods,
+  qr,
+  bankDetails,
+  codLabel,
+}: {
+  storeSlug: string;
+  currency: string;
+  buttonClass: string;
+  methods: PaymentMethod[];
+  qr: { label: string; image: string; instructions: string };
+  bankDetails: string;
+  codLabel: string;
+}) {
+  const [method, setMethod] = useState<PaymentMethod>(methods[0]);
   const { items, ready, clear } = useCart();
   const router = useRouter();
   const base = `/store/${storeSlug}`;
@@ -51,6 +70,7 @@ export function CheckoutForm({ storeSlug, currency, buttonClass }: { storeSlug: 
   const onSubmit = (form: FormData) => {
     setError("");
     form.set("coupon", appliedCoupon);
+    form.set("payment_method", method);
     startPlacing(async () => {
       const res = await placeOrder(storeSlug, cartLines, form);
       if ("error" in res) {
@@ -58,6 +78,12 @@ export function CheckoutForm({ storeSlug, currency, buttonClass }: { storeSlug: 
         return;
       }
       clear();
+      if (res.payment) {
+        const problem = goToPayment(res.payment);
+        if (!problem) return;
+        router.push(`${base}/order/${res.token}?new=1&payment=failed`);
+        return;
+      }
       router.push(`${base}/order/${res.token}?new=1`);
     });
   };
@@ -91,13 +117,42 @@ export function CheckoutForm({ storeSlug, currency, buttonClass }: { storeSlug: 
         </section>
         <section className="space-y-2">
           <h2 className="font-semibold">Payment</h2>
-          <label className="flex items-center gap-3 rounded-lg border-2 border-brand bg-brand/5 p-4">
-            <input type="radio" checked readOnly className="accent-[var(--brand)]" />
-            <span>
-              <span className="font-medium">Cash on delivery</span>
-              <span className="block text-sm text-zinc-600">Pay when your order arrives.</span>
-            </span>
-          </label>
+          {methods.map((m) => (
+            <label
+              key={m}
+              className={cn(
+                "flex cursor-pointer items-center gap-3 rounded-lg border-2 p-4 transition",
+                method === m ? "border-brand bg-brand/5" : "border-zinc-200 hover:border-zinc-300",
+              )}
+            >
+              <input
+                type="radio"
+                name="payment_choice"
+                checked={method === m}
+                onChange={() => setMethod(m)}
+                className="accent-[var(--brand)]"
+              />
+              <PaymentLogo method={m} />
+              <span>
+                <span className="font-medium">{m === "cod" ? codLabel : m === "qr" ? qr.label : METHOD_LABELS[m]}</span>
+                <span className="block text-sm text-zinc-600">{PAYMENT_HINTS[m]}</span>
+              </span>
+            </label>
+          ))}
+          {method === "qr" && (
+            <div className="space-y-3 rounded-lg bg-zinc-50 p-4">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={qr.image} alt="Payment QR code" className="mx-auto h-56 w-56 rounded-lg bg-white object-contain p-2" />
+              {qr.instructions && <p className="whitespace-pre-line text-sm text-zinc-700">{qr.instructions}</p>}
+              <ManualPaymentFields total={ok ? money(ok.total) : ""} />
+            </div>
+          )}
+          {method === "bank" && (
+            <div className="space-y-3 rounded-lg bg-zinc-50 p-4">
+              <p className="whitespace-pre-line rounded-md bg-white p-3 font-mono text-sm">{bankDetails}</p>
+              <ManualPaymentFields total={ok ? money(ok.total) : ""} />
+            </div>
+          )}
         </section>
         {error && <p className="rounded-lg bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</p>}
         <button
@@ -105,7 +160,9 @@ export function CheckoutForm({ storeSlug, currency, buttonClass }: { storeSlug: 
           disabled={placing || !ok}
           className={cn("w-full bg-brand py-4 text-lg font-semibold text-white hover:opacity-90 disabled:opacity-60", buttonClass)}
         >
-          {placing ? "Placing order…" : ok ? `Place order · ${money(ok.total)}` : "Place order"}
+          {placing
+            ? "Placing order…"
+            : `${method === "esewa" || method === "khalti" ? `Pay with ${METHOD_LABELS[method]}` : "Place order"}${ok ? ` · ${money(ok.total)}` : ""}`}
         </button>
       </form>
 
@@ -191,5 +248,41 @@ function Field({ name, label, ...rest }: { name: string; label: string } & React
       </label>
       <input id={name} name={name} className="input" {...rest} />
     </div>
+  );
+}
+
+const PAYMENT_HINTS: Record<PaymentMethod, string> = {
+  cod: "Pay in cash when your order arrives.",
+  esewa: "You'll be taken to eSewa to pay securely.",
+  khalti: "You'll be taken to Khalti to pay securely.",
+  qr: "Scan the QR code, pay, then enter the transaction ID.",
+  bank: "Transfer to the account below, then enter the reference.",
+};
+
+function PaymentLogo({ method }: { method: PaymentMethod }) {
+  const styles: Record<PaymentMethod, [string, string]> = {
+    cod: ["bg-zinc-800", "💵"],
+    esewa: ["bg-[#60bb46]", "e"],
+    khalti: ["bg-[#5c2d91]", "K"],
+    qr: ["bg-[#d71e28]", "QR"],
+    bank: ["bg-sky-700", "🏦"],
+  };
+  const [bg, text] = styles[method];
+  return <span className={cn("grid h-9 w-9 shrink-0 place-items-center rounded-lg text-sm font-bold text-white", bg)}>{text}</span>;
+}
+
+function ManualPaymentFields({ total }: { total: string }) {
+  return (
+    <>
+      {total && <p className="text-sm">Amount to pay: <span className="font-bold">{total}</span></p>}
+      <div>
+        <label className="label" htmlFor="payment_ref">Transaction ID / reference</label>
+        <input id="payment_ref" name="payment_ref" className="input" required placeholder="e.g. 0A1B2C3" />
+      </div>
+      <div>
+        <label className="label" htmlFor="payment_proof_file">Payment screenshot (optional)</label>
+        <input id="payment_proof_file" name="payment_proof_file" type="file" accept="image/png,image/jpeg,image/webp" className="text-sm" />
+      </div>
+    </>
   );
 }

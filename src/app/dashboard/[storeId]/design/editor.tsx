@@ -2,14 +2,15 @@
 
 import { useActionState, useEffect, useRef, useState } from "react";
 import { ColorPicker, ThemePicker } from "@/components/design-inputs";
-import { FormMessage, SubmitButton } from "@/components/form";
+import { FormMessage, SubmitButton, useKeepValuesSubmit } from "@/components/form";
 import { ImageInput } from "@/components/image-input";
 import { updateDesign } from "@/lib/actions/store";
 import { FONTS, type Store } from "@/lib/types";
 import { FONT_CLASS } from "@/lib/storefront";
 
 export function DesignEditor({ store }: { store: Store }) {
-  const [state, action] = useActionState(updateDesign.bind(null, store.id), undefined);
+  const [state, action, pending] = useActionState(updateDesign.bind(null, store.id), undefined);
+  const onSubmit = useKeepValuesSubmit(action);
   const frame = useRef<HTMLIFrameElement>(null);
   const [device, setDevice] = useState<"desktop" | "mobile">("desktop");
 
@@ -19,7 +20,7 @@ export function DesignEditor({ store }: { store: Store }) {
 
   return (
     <div className="grid gap-6 xl:grid-cols-[420px_1fr]">
-      <form action={action} className="space-y-6">
+      <form onSubmit={onSubmit} className="space-y-6">
         <Section title="Theme & colours">
           <ThemePicker defaultValue={store.theme} />
           <ColorPicker defaultValue={store.primary_color} />
@@ -74,7 +75,7 @@ export function DesignEditor({ store }: { store: Store }) {
 
         <div className="sticky bottom-0 -mx-1 space-y-2 bg-zinc-50/90 px-1 py-3 backdrop-blur">
           <FormMessage state={state} />
-          <SubmitButton className="btn-primary w-full">Save & publish design</SubmitButton>
+          <SubmitButton pending={pending} className="btn-primary w-full">Save & publish design</SubmitButton>
         </div>
       </form>
 

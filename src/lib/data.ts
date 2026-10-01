@@ -13,7 +13,8 @@ import {
   updateRowsWhere,
 } from "./appwrite";
 import { TABLES } from "./appwrite-schema";
-import type { Category, Coupon, Customer, Order, OrderEvent, OrderItem, Product, Store, User } from "./types";
+import { decrypt, encrypt } from "./crypto";
+import type { Category, Coupon, Customer, LedgerEntry, Order, OrderEvent, OrderItem, Product, Store, User } from "./types";
 
 /* --------------------------------- Users --------------------------------- */
 
@@ -64,6 +65,8 @@ export const updateStoreRow = (id: string, data: Partial<Store>) => updateRow<St
 export async function deleteStoreCascade(storeId: string) {
   const byStore = [Query.equal("store_id", storeId)];
   await Promise.all([
+    deleteRowsWhere(TABLES.storeSecrets, byStore),
+    deleteRowsWhere(TABLES.ledger, byStore),
     deleteRowsWhere(TABLES.orderEvents, byStore),
     deleteRowsWhere(TABLES.orderItems, byStore),
     deleteRowsWhere(TABLES.coupons, byStore),
@@ -227,6 +230,9 @@ export const getOrder = async (storeId: string, id: string) => {
 export const getOrderByToken = (storeId: string, token: string) =>
   firstRow<Order>(TABLES.orders, [Query.equal("store_id", storeId), Query.equal("public_token", token)]);
 
+export const getOrderByPublicToken = (token: string) =>
+  /^[a-f0-9]{32}$/.test(token) ? firstRow<Order>(TABLES.orders, [Query.equal("public_token", token)]) : Promise.resolve(null);
+
 export const findOrderByNumberAndPhone = (storeId: string, number: number, phone: string) =>
   firstRow<Order>(TABLES.orders, [Query.equal("store_id", storeId), Query.equal("number", number), Query.equal("phone", phone)]);
 
@@ -254,3 +260,37 @@ export const addOrderEvent = (storeId: string, orderId: string, kind: string, me
     message,
     created_at: new Date().toISOString(),
   });
+
+/* ------------------------------ Store secrets ----------------------------- */
+
+type SecretRow = { id: string; store_id: string; kind: string; data: string };
+
+/** Returns a store's decrypted credentials of one kind (e.g. "esewa"), or null. */
+export async function getStoreSecret<T>(storeId: string, kind: string): Promise<T | null> {
+  const row = await firstRow<SecretRow>(TABLES.storeSecrets, [Query.equal("store_id", storeId), Query.equal("kind", kind)]);
+  if (!row) return null;
+  try {
+    return JSON.parse(decrypt(row.data)) as T;
+  } catch {
+    return null;
+  }
+}
+
+export async function setStoreSecret(storeId: string, kind: string, value: object | null) {
+  const row = await firstRow<SecretRow>(TABLES.storeSecrets, [Query.equal("store_id", storeId), Query.equal("kind", kind)]);
+  if (!value) {
+    if (row) await deleteRow(TABLES.storeSecrets, row.id);
+    return;
+  }
+  const data = encrypt(JSON.stringify(value));
+  if (row) await updateRow(TABLES.storeSecrets, row.id, { data });
+  else await createRow(TABLES.storeSecrets, { store_id: storeId, kind, data });
+}
+
+/* --------------------------------- Ledger -------------------------------- */
+
+export const addLedgerEntry = (e: Omit<LedgerEntry, "id" | "created_at">) =>
+  createRow<LedgerEntry>(TABLES.ledger, { ...e, created_at: new Date().toISOString() });
+
+export const listLedger = (storeId: string) =>
+  listAllRows<LedgerEntry>(TABLES.ledger, [Query.equal("store_id", storeId), Query.orderDesc("created_at")]);

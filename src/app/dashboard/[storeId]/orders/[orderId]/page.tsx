@@ -6,6 +6,7 @@ import { StatusBadge } from "@/components/status-badge";
 import { addOrderNote, updateOrderStatus, updatePaymentStatus } from "@/lib/actions/orders";
 import { requireStore } from "@/lib/auth";
 import { getOrder, listOrderEvents, listOrderItems, listOrdersByCustomer } from "@/lib/data";
+import { METHOD_LABELS, type PaymentMethod } from "@/lib/payments/settings";
 import { ORDER_STATUSES, PAYMENT_STATUSES } from "@/lib/types";
 import { cn, formatDate, formatMoney } from "@/lib/utils";
 
@@ -118,7 +119,19 @@ export default async function OrderPage({ params }: { params: Promise<{ storeId:
                 <dt>Total</dt>
                 <dd>{money(order.total)}</dd>
               </div>
-              <Row label="Payment method" value={order.payment_method === "cod" ? "Cash on delivery" : order.payment_method} />
+              <Row
+                label="Payment method"
+                value={`${METHOD_LABELS[order.payment_method as PaymentMethod] ?? order.payment_method}${order.payment_gateway_mode === "farho" ? " (Farho Pay)" : ""}`}
+              />
+              {order.payment_ref && <Row label="Payment reference" value={order.payment_ref} />}
+              {order.paid_at && <Row label="Paid at" value={formatDate(order.paid_at)} />}
+              {order.payment_proof_url && (
+                <div className="pt-2">
+                  <a href={order.payment_proof_url} target="_blank" className="text-sm text-indigo-600 hover:underline">
+                    View customer&apos;s payment screenshot ↗
+                  </a>
+                </div>
+              )}
             </dl>
           </div>
 

@@ -34,6 +34,7 @@ export type Store = {
   tiktok_url: string;
   published: boolean;
   next_order_number: number;
+  payments: string;
   created_at: string;
 };
 
@@ -110,6 +111,10 @@ export type Order = {
   delivery_charge: number;
   total: number;
   payment_method: string;
+  payment_ref: string;
+  payment_proof_url: string;
+  payment_gateway_mode: string;
+  paid_at: string | null;
   payment_status: PaymentStatus;
   status: OrderStatus;
   created_at: string;
@@ -143,3 +148,14 @@ export const FONTS = ["sans", "serif", "mono"] as const;
 export type FontChoice = (typeof FONTS)[number];
 
 export type FormState = { error?: string; ok?: string } | undefined;
+
+export type LedgerEntry = {
+  id: string;
+  store_id: string;
+  order_id: string;
+  kind: "payment" | "fee" | "payout" | "refund";
+  amount: number;
+  gateway: string;
+  note: string;
+  created_at: string;
+};

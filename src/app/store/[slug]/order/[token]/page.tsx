@@ -1,7 +1,10 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getOrderByToken, listOrderItems } from "@/lib/data";
+import { PayNowButton } from "@/components/storefront/pay-now";
+import { METHOD_LABELS, ONLINE_METHODS, type PaymentMethod } from "@/lib/payments/settings";
 import { getStorefront } from "@/lib/store-data";
+import { THEME_STYLES } from "@/lib/storefront";
 import { cn, formatDate, formatMoney } from "@/lib/utils";
 
 export const metadata = { title: "Your order", robots: { index: false } };
@@ -19,10 +22,10 @@ export default async function OrderStatusPage({
   searchParams,
 }: {
   params: Promise<{ slug: string; token: string }>;
-  searchParams: Promise<{ new?: string }>;
+  searchParams: Promise<{ new?: string; payment?: string }>;
 }) {
   const { slug, token } = await params;
-  const { new: isNew } = await searchParams;
+  const { new: isNew, payment } = await searchParams;
   const { store, hidden } = await getStorefront(slug);
   if (hidden) return null;
   const order = /^[a-f0-9]{32}$/.test(token) ? await getOrderByToken(store.id, token) : null;
@@ -30,9 +33,26 @@ export default async function OrderStatusPage({
   const items = await listOrderItems([order.id]);
   const money = (n: number) => formatMoney(n, store.currency);
   const step = STEPS.findIndex((s) => s.key === order.status);
+  const method = order.payment_method as PaymentMethod;
+  const methodLabel = METHOD_LABELS[method] ?? order.payment_method;
+  const awaitingOnline = ONLINE_METHODS.includes(method) && order.payment_status === "unpaid" && order.status !== "cancelled";
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-12">
+      {payment === "paid" && order.payment_status === "paid" && (
+        <div className="mb-6 rounded-xl bg-emerald-50 p-4 text-center font-medium text-emerald-800">✓ Payment received. Thank you!</div>
+      )}
+      {(payment === "failed" || payment === "cancelled") && order.payment_status !== "paid" && (
+        <div className="mb-6 rounded-xl bg-rose-50 p-4 text-center text-rose-800">
+          {payment === "cancelled" ? "The payment was cancelled." : "The payment didn't go through."} Your order is saved — you can try again below.
+        </div>
+      )}
+      {awaitingOnline && (
+        <div className="mb-6 rounded-xl border-2 border-amber-300 bg-amber-50 p-4">
+          <p className="mb-3 text-center font-medium text-amber-900">This order is waiting for your {methodLabel} payment.</p>
+          <PayNowButton storeSlug={store.slug} token={order.public_token} label={`Pay ${money(order.total)} with ${methodLabel}`} buttonClass={THEME_STYLES[store.theme].button} />
+        </div>
+      )}
       {isNew && (
         <div className="mb-8 text-center">
           <div className="mx-auto grid h-16 w-16 place-items-center rounded-full bg-emerald-100 text-3xl">✓</div>
@@ -90,7 +110,9 @@ export default async function OrderStatusPage({
           <div className="flex justify-between pt-2 text-lg font-bold"><dt>Total</dt><dd>{money(order.total)}</dd></div>
           <div className="flex justify-between text-zinc-500">
             <dt>Payment</dt>
-            <dd>Cash on delivery · <span className="capitalize">{order.payment_status}</span></dd>
+            <dd>
+              {methodLabel} · <span className="capitalize">{order.payment_status}</span>
+            </dd>
           </div>
         </dl>
         <div className="mt-6 rounded-lg bg-zinc-50 p-4 text-sm">

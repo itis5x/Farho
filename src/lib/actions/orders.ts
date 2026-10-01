@@ -10,6 +10,7 @@ import {
   addOrderEvent,
   getCouponByCode,
   getOrder,
+  getOrderByToken,
   getProduct,
   getStoreBySlug,
   listOrderItems,
@@ -24,6 +25,9 @@ import {
   type Product,
   type Store,
 } from "@/lib/types";
+import { availableMethods, startOnlinePayment, type PaymentStart } from "@/lib/payments/service";
+import { MANUAL_METHODS, ONLINE_METHODS, PAYMENT_METHODS, type PaymentMethod } from "@/lib/payments/settings";
+import { resolveImage } from "@/lib/uploads";
 import { formatMoney } from "@/lib/utils";
 
 /* ----------------------------- Admin actions ----------------------------- */
@@ -176,13 +180,15 @@ const checkoutSchema = z.object({
   address: z.string().trim().min(4, "Please enter your delivery address.").max(250),
   note: z.string().trim().max(500).default(""),
   coupon: z.string().trim().max(20).default(""),
+  payment_method: z.enum(PAYMENT_METHODS as [PaymentMethod, ...PaymentMethod[]]).default("cod"),
+  payment_ref: z.string().trim().max(120).default(""),
 });
 
 export async function placeOrder(
   storeSlug: string,
   rawCart: CartLine[],
   form: FormData,
-): Promise<{ error: string } | { token: string }> {
+): Promise<{ error: string } | { token: string; payment?: PaymentStart }> {
   const store = await loadPublishedStore(storeSlug);
   if (!store) return { error: "This store isn't accepting orders right now." };
   const cart = cartSchema.safeParse(rawCart);
@@ -190,6 +196,19 @@ export async function placeOrder(
   const parsed = checkoutSchema.safeParse(Object.fromEntries(form));
   if (!parsed.success) return { error: parsed.error.issues[0].message };
   const d = parsed.data;
+
+  const methods = await availableMethods(store);
+  if (!methods.includes(d.payment_method)) return { error: "Please choose a payment method." };
+  const manual = MANUAL_METHODS.includes(d.payment_method);
+  if (manual && !d.payment_ref) return { error: "Please enter the transaction ID / reference of your payment." };
+  let proofUrl = "";
+  if (manual) {
+    try {
+      proofUrl = await resolveImage(form, "payment_proof");
+    } catch (e) {
+      return { error: (e as Error).message };
+    }
+  }
 
   const priced = await priceCart(store, cart.data, d.coupon);
   if ("error" in priced) return { error: priced.error };
@@ -239,6 +258,9 @@ export async function placeOrder(
       coupon_code: priced.coupon?.code ?? "",
       delivery_charge: priced.delivery,
       total: priced.total,
+      payment_method: d.payment_method,
+      payment_ref: manual ? d.payment_ref : "",
+      payment_proof_url: proofUrl,
       created_at: new Date().toISOString(),
     });
 
@@ -254,15 +276,35 @@ export async function placeOrder(
           quantity,
         }),
       ),
-      addOrderEvent(store.id, order.id, "status", "Order placed by customer"),
+      addOrderEvent(
+        store.id,
+        order.id,
+        "status",
+        manual
+          ? `Order placed — customer says they paid by ${d.payment_method === "qr" ? "QR" : "bank transfer"} (ref ${d.payment_ref}). Please verify.`
+          : "Order placed by customer",
+      ),
       priced.coupon ? incrementColumn(TABLES.coupons, priced.coupon.id, "times_used", 1) : null,
     ]);
 
     revalidatePath(`/store/${store.slug}`, "layout");
     revalidatePath(`/dashboard/${store.id}`, "layout");
+    if (ONLINE_METHODS.includes(d.payment_method)) {
+      return { token: publicToken, payment: await startOnlinePayment(store, order) };
+    }
     return { token: publicToken };
   } catch (e) {
     await release();
     throw e;
   }
+}
+
+/** Starts (or retries) an online payment for an unpaid order from the customer's order page. */
+export async function payOrder(storeSlug: string, token: string): Promise<PaymentStart> {
+  const store = await loadPublishedStore(storeSlug);
+  const order = store ? await getOrderByToken(store.id, token) : null;
+  if (!store || !order) return { type: "error", message: "Order not found." };
+  if (order.payment_status === "paid") return { type: "error", message: "This order is already paid." };
+  if (order.status === "cancelled") return { type: "error", message: "This order was cancelled." };
+  return startOnlinePayment(store, order);
 }
