@@ -2,7 +2,7 @@ import "server-only";
 import { getStore } from "@/lib/data";
 import { siteOrigin } from "@/lib/payments/service";
 import type { Channel, Conversation, Message } from "@/lib/types";
-import { aiReply } from "./ai";
+import { aiAvailable, aiReply } from "./ai";
 import { matchAutoReply, ruleReply, fill } from "./bot";
 import { addMessage, listAutoReplies, listMessages, messageExists, updateConversation, upsertConversation } from "./data";
 import { getInboxSettings } from "./settings";
@@ -39,11 +39,18 @@ export async function handleIncoming(m: Incoming): Promise<{ conversation: Conve
   let sender: Message["sender"] = "bot";
   const rule = matchAutoReply(await listAutoReplies(store.id), m.text);
   if (rule) reply = fill(rule.reply, store, origin);
+  // Free built-in answers first; the paid AI assistant only handles what they can't — plus ordering, where a
+  // conversation is needed, and chats the assistant is already in the middle of.
+  const lastOut = [...history].reverse().find((h) => h.direction === "out");
+  const ordering = /\b(order|buy|want|need|book|purchase|chahiyo|chainxa|chaincha|kinna|kinchu|pathaidinu|deliver to)\b/i.test(m.text) || /\b9[78]\d{8}\b/.test(m.text);
+  const tracking = /\b(track|tracking|status|where is)\b/i.test(m.text) && /\b\d{4,6}\b/.test(m.text); // free rule handles it
+  const aiFirst = aiAvailable() && settings.ai_enabled && !tracking && (ordering || lastOut?.sender === "ai");
+  if (!reply && !aiFirst) reply = await ruleReply(store, conv, m.text, isFirst, settings, origin, false);
   if (!reply) {
     reply = await aiReply(store, conv, [...history, incoming], settings, origin);
     if (reply) sender = "ai";
   }
-  if (!reply) reply = await ruleReply(store, conv, m.text, isFirst, settings, origin);
+  if (!reply) reply = (await ruleReply(store, conv, m.text, isFirst, settings, origin, true))!;
 
   const sent = await sendReply(m.channel, conv, reply, sender);
   return { conversation: conv, replies: sent ? [sent] : [] };

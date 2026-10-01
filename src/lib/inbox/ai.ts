@@ -9,12 +9,29 @@ import { formatMoney } from "@/lib/utils";
 import type { InboxSettings } from "./settings";
 import { orderStatusText, placeChatOrder, productLine, searchProducts } from "./tools";
 
-const MODEL = process.env.FARHO_AI_MODEL || "claude-opus-5-5";
+// Haiku 4.5 is Anthropic's cheapest current model ($1 / $5 per million tokens) and plenty for shop chat.
+const MODEL = process.env.FARHO_AI_MODEL || "claude-haiku-4-5";
+const IS_HAIKU = MODEL.startsWith("claude-haiku");
+
+// Budget guard: at most this many API calls per day across all stores (in-memory, resets daily).
+const DAILY_LIMIT = Number(process.env.FARHO_AI_DAILY_LIMIT ?? "150");
+let usage = { day: "", calls: 0 };
+function takeBudget() {
+  const day = new Date().toISOString().slice(0, 10);
+  if (usage.day !== day) usage = { day, calls: 0 };
+  if (usage.calls >= DAILY_LIMIT) return false;
+  usage.calls++;
+  return true;
+}
 
 export const aiAvailable = () => !!(process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN);
 
 let client: Anthropic | null = null;
-const anthropic = () => (client ??= new Anthropic());
+// Org-level keys (sk-ant-usr-…) must say which workspace to bill; workspace keys don't need this.
+const anthropic = () =>
+  (client ??= new Anthropic(
+    process.env.ANTHROPIC_WORKSPACE_ID ? { defaultHeaders: { "anthropic-workspace-id": process.env.ANTHROPIC_WORKSPACE_ID } } : {},
+  ));
 
 const searchInput = z.object({ query: z.string().min(1).max(200) });
 const orderStatusInput = z.object({ order_number: z.number().int().positive(), phone: z.string().max(20) });
@@ -139,17 +156,20 @@ function toTurns(history: Message[]): Anthropic.Beta.BetaMessageParam[] {
 export async function aiReply(store: Store, conv: Conversation, history: Message[], settings: InboxSettings, origin: string) {
   if (!aiAvailable() || !settings.ai_enabled) return null;
   const methods = await availableMethods(store);
-  const messages = toTurns(history.slice(-30));
+  // Short context keeps every call cheap.
+  const messages = toTurns(history.slice(-12));
   if (!messages.length) return null;
 
   try {
-    for (let step = 0; step < 6; step++) {
+    for (let step = 0; step < 4; step++) {
+      if (!takeBudget()) return null;
       const response = await anthropic().beta.messages.create({
         model: MODEL,
-        max_tokens: 4000,
-        betas: ["server-side-fallback-2026-07-01"],
-        fallbacks: "default",
-        output_config: { effort: "low" },
+        max_tokens: 600,
+        // Haiku 4.5 doesn't take effort or server-side fallbacks; larger models run at low effort with fallbacks.
+        ...(IS_HAIKU
+          ? {}
+          : { betas: ["server-side-fallback-2026-07-01"], fallbacks: "default" as const, output_config: { effort: "low" as const } }),
         system: systemPrompt(store, settings, methods, origin),
         tools: tools(settings.take_orders, methods),
         messages,

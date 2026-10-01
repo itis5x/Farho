@@ -25,7 +25,11 @@ export function matchAutoReply(rules: AutoReply[], text: string) {
 }
 
 /** Built-in replies that work without AI: greetings, catalogue, prices and order status. */
-export async function ruleReply(store: Store, conv: Conversation, text: string, isFirst: boolean, settings: InboxSettings, origin: string) {
+/**
+ * Built-in replies that cost nothing. Returns null when no rule fits and `final` is false, so the caller can try the
+ * AI assistant before falling back to the generic message.
+ */
+export async function ruleReply(store: Store, conv: Conversation, text: string, isFirst: boolean, settings: InboxSettings, origin: string, final = true): Promise<string | null> {
   const shop = `${origin}/store/${store.slug}`;
 
   const orderNo = text.match(/#?\b(\d{4,6})\b/);
@@ -58,6 +62,9 @@ export async function ruleReply(store: Store, conv: Conversation, text: string, 
     return `${lines.join("\n\n")}\n\nWant to order? Tap the link, or tell me your name, phone and address.`;
   }
 
-  if (isFirst || has(text, "hi", "hello", "hey", "namaste", "namaskar", "hlo", "helo")) return fill(settings.greeting, store, origin);
+  const greeting = has(text, "hi", "hello", "hey", "namaste", "namaskar", "hlo", "helo");
+  if (greeting && text.trim().split(/\s+/).length <= 3) return fill(settings.greeting, store, origin);
+  if (!final) return null;
+  if (isFirst || greeting) return fill(settings.greeting, store, origin);
   return fill(settings.fallback, store, origin);
 }
