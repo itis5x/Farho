@@ -10,7 +10,11 @@ export const UPLOAD_DIR = path.join(DATA_DIR, "uploads");
 function open() {
   fs.mkdirSync(UPLOAD_DIR, { recursive: true });
   const db = new Database(path.join(DATA_DIR, "farho.db"));
-  db.pragma("journal_mode = WAL");
+  // WAL is fastest on a local disk. On network storage (e.g. Azure App Service's /home)
+  // set SQLITE_JOURNAL_MODE=DELETE, since WAL needs shared memory that network shares lack.
+  const journal = (process.env.SQLITE_JOURNAL_MODE || "WAL").toUpperCase();
+  db.pragma(`journal_mode = ${/^(WAL|DELETE|TRUNCATE)$/.test(journal) ? journal : "WAL"}`);
+  db.pragma("busy_timeout = 5000");
   db.pragma("foreign_keys = ON");
   db.exec(SCHEMA);
   return db;

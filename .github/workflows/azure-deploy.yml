@@ -1,0 +1,41 @@
+name: Deploy to Azure App Service
+
+on:
+  push:
+    branches: [main, claude/upbeat-wozniak-mg8adw]
+  workflow_dispatch:
+
+concurrency:
+  group: azure-deploy
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    # Skips cleanly until the Azure app name has been configured.
+    if: ${{ vars.AZURE_WEBAPP_NAME != '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run build
+
+      - name: Assemble deployment package
+        run: |
+          cp -r .next/static .next/standalone/.next/static
+          if [ -d public ]; then cp -r public .next/standalone/public; fi
+          cp deploy/startup.sh .next/standalone/startup.sh
+          cd .next/standalone && zip -qr ../../app.zip .
+
+      - name: Deploy
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ vars.AZURE_WEBAPP_NAME }}
+          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+          package: app.zip

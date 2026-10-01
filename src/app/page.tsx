@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Logo } from "@/components/logo";
 import { getCurrentUser } from "@/lib/auth";
+import { db } from "@/lib/db";
 
 const features = [
   {
@@ -37,6 +38,7 @@ const features = [
 
 export default async function Home() {
   const user = await getCurrentUser();
+  const hasDemo = !!db.prepare("SELECT 1 FROM stores WHERE slug = 'demo' AND published = 1").get();
   return (
     <div className="min-h-screen bg-white">
       <header className="mx-auto flex max-w-6xl items-center justify-between px-4 py-5">
@@ -72,9 +74,11 @@ export default async function Home() {
           <Link href={user ? "/dashboard/new" : "/signup"} className="btn-primary px-6 py-3 text-base">
             Create your store
           </Link>
-          <Link href="/store/demo" className="btn-secondary px-6 py-3 text-base">
-            View demo store
-          </Link>
+          {hasDemo && (
+            <Link href="/store/demo" className="btn-secondary px-6 py-3 text-base">
+              View demo store
+            </Link>
+          )}
         </div>
       </section>
 
