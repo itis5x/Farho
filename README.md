@@ -28,16 +28,24 @@ products, orders and customers from an admin panel. Customers shop on the store'
 
 ## Tech
 
-Next.js 15 (App Router, server actions) · React 19 · Tailwind CSS 4 · SQLite (better-sqlite3) · zod.
-No external services needed. The database and uploaded images live in `DATA_DIR` (default `./data`).
+Next.js 15 (App Router, server actions) · React 19 · Tailwind CSS 4 · Appwrite (TablesDB + Storage) · zod.
+All data lives in an Appwrite project; uploaded images go to an Appwrite Storage bucket. The browser never talks to
+Appwrite directly — every read and write goes through the server with an API key.
 
 ## Getting started
 
+1. Create an Appwrite project and an API key with these scopes: `databases`, `tables`, `columns`, `indexes`, `rows`,
+   `buckets`, `files` (read + write).
+2. Copy `.env.example` to `.env.local` and fill in `APPWRITE_PROJECT_ID` and `APPWRITE_API_KEY`.
+
 ```bash
 npm install
-npm run seed    # optional: demo store at /store/demo, login demo@farho.app / demo1234
-npm run dev     # http://localhost:3000
+npm run setup:appwrite   # creates the database, tables, indexes and image bucket (safe to re-run)
+npm run seed             # optional: demo store at /store/demo, login demo@farho.app / demo1234
+npm run dev              # http://localhost:3000
 ```
+
+The scripts read the same variables; export them in your shell (or prefix the command) when running them.
 
 Production: `npm run build && npm start`. Type-check with `npm run typecheck`.
 
@@ -53,10 +61,19 @@ src/app/(auth)            signup / login / logout
 src/app/dashboard         store list, create store, per-store admin panel
 src/app/store/[slug]      public storefront (home, products, product, cart, checkout, order, track)
 src/lib/actions           server actions (store, catalog, orders + checkout)
-src/lib/schema.ts         SQLite schema
+src/lib/appwrite-schema.ts  Appwrite tables, columns and indexes
+src/lib/data.ts           all data access
+scripts/setup-appwrite.mts  creates the Appwrite schema
 src/middleware.ts         subdomain → storefront rewrite
 scripts/seed.mts          demo data
 ```
+
+## Deploying to Azure App Service
+
+The app builds to a standalone Node server (`.next/standalone`). Deploy it to a Linux App Service (Node 22) with the
+startup command `sh /home/site/wwwroot/startup.sh` and these app settings: `APPWRITE_ENDPOINT`, `APPWRITE_PROJECT_ID`,
+`APPWRITE_API_KEY`, `SCM_DO_BUILD_DURING_DEPLOYMENT=false`. `.github/workflows/azure-deploy.yml` automates this once the
+`AZURE_WEBAPP_NAME` repository variable and `AZURE_WEBAPP_PUBLISH_PROFILE` secret are set.
 
 ## Next steps
 
