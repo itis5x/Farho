@@ -22,6 +22,8 @@ export const TABLES = {
   messages: "messages",
   autoReplies: "auto_replies",
   variants: "product_variants",
+  reviews: "reviews",
+  staff: "staff",
 } as const;
 
 export type ColumnDef =
@@ -352,6 +354,41 @@ export const SCHEMA: TableDef[] = [
     indexes: [
       { key: "product_idx", type: "key", columns: ["product_id"] },
       { key: "store_idx", type: "key", columns: ["store_id"] },
+    ],
+  },
+  {
+    id: TABLES.reviews,
+    name: "Reviews",
+    columns: [
+      v("store_id", 36, { required: true }),
+      v("product_id", 36, { required: true }),
+      v("name", 80, { required: true }),
+      v("phone", 20),
+      { key: "rating", type: "integer", required: true },
+      v("text", 1500),
+      { key: "verified", type: "boolean", default: false },
+      { key: "approved", type: "boolean", default: false },
+      v("reply", 1000),
+      { key: "created_at", type: "datetime", required: true },
+    ],
+    indexes: [
+      { key: "product_idx", type: "key", columns: ["product_id"] },
+      { key: "store_created_idx", type: "key", columns: ["store_id", "created_at"], orders: ["ASC", "DESC"] },
+    ],
+  },
+  {
+    id: TABLES.staff,
+    name: "Staff",
+    columns: [
+      v("store_id", 36, { required: true }),
+      v("email", 200, { required: true }),
+      v("user_id", 36),
+      { key: "role", type: "enum", elements: ["manager", "staff"], required: true },
+    ],
+    indexes: [
+      { key: "store_email_unique", type: "unique", columns: ["store_id", "email"] },
+      { key: "user_idx", type: "key", columns: ["user_id"] },
+      { key: "email_idx", type: "key", columns: ["email"] },
     ],
   },
 ];

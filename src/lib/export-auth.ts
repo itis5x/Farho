@@ -1,13 +1,12 @@
 import "server-only";
-import { getCurrentUser } from "./auth";
-import { getStore } from "./data";
+import { canAccess, getCurrentUser, storeRole } from "./auth";
 
-/** For download routes: the store, if the signed-in user owns it. */
+/** For download routes: the store, if the signed-in user is its owner or a manager. */
 export async function ownedStore(storeId: string) {
   const user = await getCurrentUser();
   if (!user || !/^[a-zA-Z0-9]{1,36}$/.test(storeId)) return null;
-  const store = await getStore(storeId);
-  return store && store.owner_id === user.id ? store : null;
+  const access = await storeRole(storeId, user.id);
+  return access && canAccess(access.role, "manager") ? access.store : null;
 }
 
 export const csvResponse = (csv: string, name: string) =>

@@ -14,7 +14,7 @@ import {
 } from "./appwrite";
 import { TABLES } from "./appwrite-schema";
 import { decrypt, encrypt } from "./crypto";
-import type { Category, Coupon, Customer, LedgerEntry, Order, OrderEvent, OrderItem, Product, ProductOption, Store, User, Variant } from "./types";
+import type { Category, Coupon, Customer, LedgerEntry, Order, OrderEvent, OrderItem, Product, ProductOption, Review, StaffMember, Store, User, Variant } from "./types";
 
 /* --------------------------------- Users --------------------------------- */
 
@@ -76,6 +76,8 @@ export async function deleteStoreCascade(storeId: string) {
     deleteRowsWhere(TABLES.coupons, byStore),
     deleteRowsWhere(TABLES.products, byStore),
     deleteRowsWhere(TABLES.variants, byStore),
+    deleteRowsWhere(TABLES.reviews, byStore),
+    deleteRowsWhere(TABLES.staff, byStore),
     deleteRowsWhere(TABLES.categories, byStore),
   ]);
   await Promise.all([deleteRowsWhere(TABLES.orders, byStore), deleteRowsWhere(TABLES.customers, byStore)]);
@@ -351,3 +353,57 @@ export const addLedgerEntry = (e: Omit<LedgerEntry, "id" | "created_at">) =>
 
 export const listLedger = (storeId: string) =>
   listAllRows<LedgerEntry>(TABLES.ledger, [Query.equal("store_id", storeId), Query.orderDesc("created_at")]);
+
+/* -------------------------------- Reviews -------------------------------- */
+
+export const listProductReviews = (productId: string) =>
+  listAllRows<Review>(TABLES.reviews, [Query.equal("product_id", productId), Query.equal("approved", true), Query.orderDesc("created_at")]);
+
+export const listStoreReviews = (storeId: string) =>
+  listRows<Review>(TABLES.reviews, [Query.equal("store_id", storeId), Query.orderDesc("created_at"), Query.limit(200)]).then((r) => r.rows);
+
+export const getReview = async (storeId: string, id: string) => {
+  const r = await getRow<Review>(TABLES.reviews, id);
+  return r && r.store_id === storeId ? r : null;
+};
+
+export const createReview = (r: Omit<Review, "id" | "created_at" | "reply">) =>
+  createRow<Review>(TABLES.reviews, { ...r, created_at: new Date().toISOString() });
+
+export const updateReview = (id: string, data: Partial<Review>) => updateRow<Review>(TABLES.reviews, id, data);
+export const deleteReview = (id: string) => deleteRow(TABLES.reviews, id);
+
+export const findReviewByPhone = (productId: string, phone: string) =>
+  firstRow<Review>(TABLES.reviews, [Query.equal("product_id", productId), Query.equal("phone", phone)]);
+
+/** Average rating and count of approved reviews, per product. */
+export async function ratingsByProduct(storeId: string) {
+  const rows = await listAllRows<Review>(TABLES.reviews, [Query.equal("store_id", storeId), Query.equal("approved", true), Query.select(["$id", "product_id", "rating"])]);
+  const m = new Map<string, { sum: number; count: number }>();
+  for (const r of rows) {
+    const cur = m.get(r.product_id) ?? { sum: 0, count: 0 };
+    m.set(r.product_id, { sum: cur.sum + r.rating, count: cur.count + 1 });
+  }
+  return new Map([...m].map(([k, v]) => [k, { avg: v.sum / v.count, count: v.count }]));
+}
+
+/** Did this phone number receive (delivered) an order containing this product? */
+export async function hasBought(storeId: string, productId: string, phone: string) {
+  const orders = await listAllRows<Order>(TABLES.orders, [Query.equal("store_id", storeId), Query.equal("phone", phone), Query.equal("status", "delivered"), Query.select(["$id"])]);
+  if (!orders.length) return false;
+  const items = await listOrderItems(orders.map((o) => o.id));
+  return items.some((i) => i.product_id === productId);
+}
+
+/* ---------------------------------- Staff -------------------------------- */
+
+export const listStaff = (storeId: string) => listAllRows<StaffMember>(TABLES.staff, [Query.equal("store_id", storeId), Query.orderAsc("$createdAt")]);
+export const staffForUser = (userId: string) => listAllRows<StaffMember>(TABLES.staff, [Query.equal("user_id", userId)]);
+
+export const staffMembership = (storeId: string, userId: string) =>
+  firstRow<StaffMember>(TABLES.staff, [Query.equal("store_id", storeId), Query.equal("user_id", userId)]);
+export const staffInvitesForEmail = (email: string) => listAllRows<StaffMember>(TABLES.staff, [Query.equal("email", email.toLowerCase()), Query.equal("user_id", "")]);
+export const addStaff = (storeId: string, email: string, role: StaffMember["role"], userId: string | null) =>
+  createRow<StaffMember>(TABLES.staff, { store_id: storeId, email: email.toLowerCase(), role, ...(userId ? { user_id: userId } : {}) });
+export const updateStaff = (id: string, data: Partial<StaffMember>) => updateRow<StaffMember>(TABLES.staff, id, data);
+export const removeStaff = (id: string) => deleteRow(TABLES.staff, id);

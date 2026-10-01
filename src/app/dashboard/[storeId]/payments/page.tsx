@@ -10,7 +10,7 @@ export const metadata = { title: "Payments" };
 
 export default async function PaymentsPage({ params }: { params: Promise<{ storeId: string }> }) {
   const { storeId } = await params;
-  const { store } = await requireStore(storeId);
+  const { store } = await requireStore(storeId, "owner");
   const [esewa, khalti, ledger] = await Promise.all([
     getStoreSecret<OwnEsewa>(store.id, "esewa"),
     getStoreSecret<OwnKhalti>(store.id, "khalti"),

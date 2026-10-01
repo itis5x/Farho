@@ -16,7 +16,7 @@ export default async function StoreAdminLayout({
   params: Promise<{ storeId: string }>;
 }) {
   const { storeId } = await params;
-  const { user, store } = await requireStore(storeId);
+  const { user, store, role } = await requireStore(storeId);
   const [pending, conversations] = await Promise.all([
     countOrders(store.id, [Query.equal("status", "pending")]),
     listConversations(store.id),
@@ -47,7 +47,7 @@ export default async function StoreAdminLayout({
             </Link>
           </div>
         </div>
-        <AdminNav storeId={store.id} pending={pending} unread={unread} />
+        <AdminNav storeId={store.id} pending={pending} unread={unread} role={role} />
         <div className="hidden px-5 py-4 lg:block">
           <a href={storeUrl(store.slug)} target="_blank" className="btn-secondary w-full">
             View website ↗

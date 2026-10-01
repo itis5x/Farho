@@ -6,6 +6,7 @@ import { TABLES } from "./appwrite-schema";
 import { addOrderEvent, getCouponByCode, getProduct, getVariant, productOptions, upsertCustomer } from "./data";
 import type { PaymentMethod } from "./payments/settings";
 import type { Coupon, Order, Product, Store, Variant } from "./types";
+import { notifyOrder } from "./sms";
 import { formatMoney } from "./utils";
 
 export type CartLine = { productId: string; variantId?: string; quantity: number };
@@ -176,6 +177,7 @@ export async function createOrder(input: NewOrder): Promise<{ order: Order; pric
 
     revalidatePath(`/store/${store.slug}`, "layout");
     revalidatePath(`/dashboard/${store.id}`, "layout");
+    void notifyOrder(order, "placed", store);
     return { order, priced };
   } catch (e) {
     await release();

@@ -15,7 +15,7 @@ function refresh(store: { id: string; slug: string }) {
 
 /** Saves the whole builder state (sections, pages, custom CSS). */
 export async function saveLayout(storeId: string, json: string): Promise<FormState> {
-  const { store } = await requireStore(storeId);
+  const { store } = await requireStore(storeId, "manager");
   let raw: unknown;
   try {
     raw = JSON.parse(json);
@@ -36,7 +36,7 @@ export async function saveLayout(storeId: string, json: string): Promise<FormSta
 
 /** Replaces the homepage and look with a template (keeps products, pages and settings). */
 export async function applyTemplate(storeId: string, templateId: string): Promise<FormState> {
-  const { store } = await requireStore(storeId);
+  const { store } = await requireStore(storeId, "manager");
   const t = getTemplate(templateId);
   if (!t) return { error: "Template not found." };
   const current = parseLayout(store.layout, store);

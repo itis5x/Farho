@@ -14,10 +14,10 @@ export default async function OverviewPage({
   searchParams,
 }: {
   params: Promise<{ storeId: string }>;
-  searchParams: Promise<{ welcome?: string }>;
+  searchParams: Promise<{ welcome?: string; denied?: string }>;
 }) {
   const { storeId } = await params;
-  const { welcome } = await searchParams;
+  const { welcome, denied } = await searchParams;
   const { store } = await requireStore(storeId);
 
   const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
@@ -65,6 +65,9 @@ export default async function OverviewPage({
         <p className="text-sm text-zinc-600">Last 30 days performance for {store.name}.</p>
       </div>
 
+      {denied && (
+        <p className="rounded-lg bg-amber-50 px-4 py-2 text-sm text-amber-800">You don&apos;t have permission to open that page. Ask the store owner for access.</p>
+      )}
       {showChecklist && (
         <div className="card p-5">
           <h2 className="font-semibold">Get your store ready</h2>

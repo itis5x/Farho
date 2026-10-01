@@ -10,7 +10,7 @@ import { getOrder, setStoreSecret } from "@/lib/data";
 import type { FormState } from "@/lib/types";
 
 export async function connectPathao(storeId: string, _prev: FormState, form: FormData): Promise<FormState> {
-  const { store } = await requireStore(storeId);
+  const { store } = await requireStore(storeId, "manager");
   const existing = await getPathao(store.id);
   const creds: PathaoCredentials = {
     client_id: String(form.get("client_id") ?? "").trim() || existing?.client_id || "",
@@ -34,7 +34,7 @@ export async function connectPathao(storeId: string, _prev: FormState, form: For
 }
 
 export async function connectNcm(storeId: string, _prev: FormState, form: FormData): Promise<FormState> {
-  const { store } = await requireStore(storeId);
+  const { store } = await requireStore(storeId, "manager");
   const token = String(form.get("token") ?? "").trim();
   const pickup = String(form.get("pickup_branch") ?? "").trim();
   const sandbox = form.get("sandbox") === "on";
@@ -52,7 +52,7 @@ export async function connectNcm(storeId: string, _prev: FormState, form: FormDa
 }
 
 export async function disconnectCourier(storeId: string, courier: "pathao" | "ncm") {
-  const { store } = await requireStore(storeId);
+  const { store } = await requireStore(storeId, "manager");
   await setStoreSecret(store.id, `courier:${courier}`, null);
   revalidatePath(`/dashboard/${store.id}`, "layout");
 }

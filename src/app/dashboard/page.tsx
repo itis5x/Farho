@@ -2,19 +2,24 @@ import Link from "next/link";
 import { Logo } from "@/components/logo";
 import { UserMenu } from "@/components/user-menu";
 import { requireUser } from "@/lib/auth";
-import { countProducts, listOrders, listStoresByOwner } from "@/lib/data";
+import { redirect } from "next/navigation";
+import { countProducts, getStore, listOrders, listStoresByOwner, staffForUser } from "@/lib/data";
 import { Query } from "@/lib/appwrite";
 import type { Store } from "@/lib/types";
 import { formatMoney, storeUrl } from "@/lib/utils";
 
 export const metadata = { title: "Your stores" };
 
-type StoreRow = Store & { order_count: number; pending_count: number; revenue: number; product_count: number };
+type StoreRow = Store & { order_count: number; pending_count: number; revenue: number; product_count: number; role: string };
 
 export default async function StoresPage() {
   const user = await requireUser();
+  const [owned, memberships] = await Promise.all([listStoresByOwner(user.id), staffForUser(user.id)]);
+  const shared = (await Promise.all(memberships.map(async (m) => ({ store: await getStore(m.store_id), role: m.role })))).filter((x) => x.store);
+  if (!owned.length && !shared.length) redirect("/dashboard/new");
+  const all = [...owned.map((s) => ({ store: s, role: "owner" })), ...shared.map((x) => ({ store: x.store!, role: x.role }))];
   const stores: StoreRow[] = await Promise.all(
-    (await listStoresByOwner(user.id)).map(async (s) => {
+    all.map(async ({ store: s, role }) => {
       const [orders, product_count] = await Promise.all([
         listOrders(s.id, [Query.select(["$id", "status", "total", "created_at"])]),
         countProducts(s.id),
@@ -25,6 +30,7 @@ export default async function StoresPage() {
         pending_count: orders.filter((o) => o.status === "pending").length,
         revenue: orders.filter((o) => o.status !== "cancelled").reduce((sum, o) => sum + o.total, 0),
         product_count,
+        role,
       };
     }),
   );
@@ -83,7 +89,10 @@ export default async function StoresPage() {
                         <p className="text-xs text-zinc-500">/store/{s.slug}</p>
                       </div>
                     </div>
-                    {!s.published && <span className="badge bg-zinc-100 text-zinc-600">Draft</span>}
+                    <div className="flex gap-1">
+                      {s.role !== "owner" && <span className="badge bg-indigo-50 text-indigo-700">{s.role}</span>}
+                      {!s.published && <span className="badge bg-zinc-100 text-zinc-600">Draft</span>}
+                    </div>
                   </div>
                   <dl className="mt-5 grid grid-cols-3 gap-2 text-center">
                     <Stat label="Orders" value={s.order_count} />

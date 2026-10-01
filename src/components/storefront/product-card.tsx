@@ -2,6 +2,7 @@ import Link from "next/link";
 import { THEME_STYLES } from "@/lib/storefront";
 import type { Product, Store } from "@/lib/types";
 import { cn, formatMoney } from "@/lib/utils";
+import { HeartButton } from "./wishlist";
 
 export function ProductCard({ product, store }: { product: Product; store: Store }) {
   const t = THEME_STYLES[store.theme];
@@ -23,6 +24,11 @@ export function ProductCard({ product, store }: { product: Product; store: Store
         ) : (
           <div className="grid h-full w-full place-items-center text-4xl text-zinc-300">🛍️</div>
         )}
+        <HeartButton
+          store={store.slug}
+          item={{ id: product.id, slug: product.slug, name: product.name, price: product.price, image: product.image_url }}
+          className="absolute right-2 top-2 opacity-0 transition group-hover:opacity-100 max-md:opacity-100"
+        />
         {soldOut ? (
           <span className="absolute left-2 top-2 rounded bg-zinc-900 px-2 py-0.5 text-xs font-semibold text-white">Sold out</span>
         ) : off > 0 ? (

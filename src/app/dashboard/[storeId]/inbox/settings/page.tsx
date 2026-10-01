@@ -13,7 +13,7 @@ export const metadata = { title: "Channels & assistant" };
 
 export default async function InboxSettingsPage({ params }: { params: Promise<{ storeId: string }> }) {
   const { storeId } = await params;
-  const { store } = await requireStore(storeId);
+  const { store } = await requireStore(storeId, "manager");
   const [channels, rules] = await Promise.all([listChannels(store.id), listAutoReplies(store.id)]);
   const connected = channels.filter((c) => c.kind !== "web");
 

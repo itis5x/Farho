@@ -67,7 +67,7 @@ const designSchema = z.object({
 });
 
 export async function updateDesign(storeId: string, _prev: FormState, form: FormData): Promise<FormState> {
-  const { store } = await requireStore(storeId);
+  const { store } = await requireStore(storeId, "manager");
   const parsed = designSchema.safeParse(Object.fromEntries(form));
   if (!parsed.success) return { error: parsed.error.issues[0].message };
   let logo: string;
@@ -104,7 +104,7 @@ const settingsSchema = z.object({
 });
 
 export async function updateSettings(storeId: string, _prev: FormState, form: FormData): Promise<FormState> {
-  const { store } = await requireStore(storeId);
+  const { store } = await requireStore(storeId, "owner");
   const parsed = settingsSchema.safeParse(Object.fromEntries(form));
   if (!parsed.success) return { error: parsed.error.issues[0].message };
   await updateStoreRow(store.id, parsed.data);
@@ -114,7 +114,7 @@ export async function updateSettings(storeId: string, _prev: FormState, form: Fo
 }
 
 export async function deleteStore(storeId: string, form: FormData) {
-  const { store } = await requireStore(storeId);
+  const { store } = await requireStore(storeId, "owner");
   if (String(form.get("confirm") ?? "").trim() !== store.slug) {
     redirect(`/dashboard/${store.id}/settings?error=confirm`);
   }

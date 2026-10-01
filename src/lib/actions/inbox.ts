@@ -46,7 +46,7 @@ export async function markRead(storeId: string, conversationId: string) {
 }
 
 export async function saveInboxSettings(storeId: string, _prev: FormState, form: FormData): Promise<FormState> {
-  const { store } = await requireStore(storeId);
+  const { store } = await requireStore(storeId, "manager");
   const next: InboxSettings = {
     ...getInboxSettings(store),
     greeting: String(form.get("greeting") ?? "").trim().slice(0, 500),
@@ -62,7 +62,7 @@ export async function saveInboxSettings(storeId: string, _prev: FormState, form:
 }
 
 export async function addAutoReply(storeId: string, _prev: FormState, form: FormData): Promise<FormState> {
-  const { store } = await requireStore(storeId);
+  const { store } = await requireStore(storeId, "manager");
   const keywords = String(form.get("keywords") ?? "").trim().slice(0, 300);
   const reply = String(form.get("reply") ?? "").trim().slice(0, 1000);
   if (!keywords || !reply) return { error: "Add at least one keyword and a reply." };
@@ -72,13 +72,13 @@ export async function addAutoReply(storeId: string, _prev: FormState, form: Form
 }
 
 export async function removeAutoReply(storeId: string, id: string) {
-  const { store } = await requireStore(storeId);
+  const { store } = await requireStore(storeId, "manager");
   await deleteAutoReply(id);
   revalidatePath(`/dashboard/${store.id}/inbox/settings`);
 }
 
 export async function disconnectChannel(storeId: string, channelId: string) {
-  const { store } = await requireStore(storeId);
+  const { store } = await requireStore(storeId, "manager");
   const channel = await getChannel(channelId);
   if (!channel || channel.store_id !== store.id || channel.kind === "web") return;
   if (channel.kind === "telegram") {
@@ -93,7 +93,7 @@ export async function disconnectChannel(storeId: string, channelId: string) {
 /* ------------------------------- Connecting ------------------------------ */
 
 export async function connectTelegram(storeId: string, _prev: FormState, form: FormData): Promise<FormState> {
-  const { store } = await requireStore(storeId);
+  const { store } = await requireStore(storeId, "manager");
   const token = String(form.get("bot_token") ?? "").trim();
   if (!/^\d{5,}:[A-Za-z0-9_-]{30,}$/.test(token)) return { error: "That doesn't look like a Telegram bot token (from @BotFather)." };
 
@@ -140,7 +140,7 @@ async function checkMeta(kind: ChannelKind, id: string, token: string): Promise<
 }
 
 export async function connectMeta(storeId: string, _prev: FormState, form: FormData): Promise<FormState & { webhook?: { url: string; verifyToken: string } }> {
-  const { store } = await requireStore(storeId);
+  const { store } = await requireStore(storeId, "manager");
   const parsed = metaSchema.safeParse(Object.fromEntries(form));
   if (!parsed.success) return { error: parsed.error.issues[0].message };
   const d = parsed.data;

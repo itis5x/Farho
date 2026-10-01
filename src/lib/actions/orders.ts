@@ -10,6 +10,7 @@ import { createOrder, priceCart, type CartLine } from "@/lib/orders";
 import { availableMethods, startOnlinePayment, type PaymentStart } from "@/lib/payments/service";
 import { MANUAL_METHODS, ONLINE_METHODS, PAYMENT_METHODS, type PaymentMethod } from "@/lib/payments/settings";
 import { ORDER_STATUSES, PAYMENT_STATUSES } from "@/lib/types";
+import { notifyOrder } from "@/lib/sms";
 import { resolveImage } from "@/lib/uploads";
 
 /* ----------------------------- Admin actions ----------------------------- */
@@ -60,6 +61,7 @@ export async function updateOrderStatus(storeId: string, orderId: string, form: 
   await updateOrderRow(order.id, { status, ...(markPaid ? { payment_status: "paid" as const } : {}) });
   await addOrderEvent(store.id, order.id, "status", `Status changed from ${order.status} to ${status}`);
   if (markPaid) await addOrderEvent(store.id, order.id, "payment", "Cash collected on delivery — marked as paid");
+  if (status === "shipped" || status === "delivered") void notifyOrder({ ...order, status }, status, store);
   revalidatePath(`/dashboard/${store.id}`, "layout");
 }
 

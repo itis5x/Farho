@@ -232,3 +232,20 @@ export type Message = {
 };
 
 export type AutoReply = { id: string; store_id: string; keywords: string; reply: string; active: boolean };
+
+export type Review = {
+  id: string;
+  store_id: string;
+  product_id: string;
+  name: string;
+  phone: string;
+  rating: number;
+  text: string;
+  verified: boolean;
+  approved: boolean;
+  reply: string;
+  created_at: string;
+};
+
+export type StaffRole = "owner" | "manager" | "staff";
+export type StaffMember = { id: string; store_id: string; email: string; user_id: string; role: Exclude<StaffRole, "owner">; created_at: string };

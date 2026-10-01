@@ -45,7 +45,7 @@ function Bars({ rows, money }: { rows: { label: string; value: number; extra?: s
 export default async function ReportsPage({ params, searchParams }: { params: Promise<{ storeId: string }>; searchParams: Promise<{ days?: string }> }) {
   const { storeId } = await params;
   const days = (Object.keys(PERIODS).includes((await searchParams).days ?? "") ? (await searchParams).days : "30") as keyof typeof PERIODS;
-  const { store } = await requireStore(storeId);
+  const { store } = await requireStore(storeId, "manager");
   const money = (n: number) => formatMoney(Math.round(n), store.currency);
   const since = new Date(Date.now() - Number(days) * 86_400_000).toISOString();
 

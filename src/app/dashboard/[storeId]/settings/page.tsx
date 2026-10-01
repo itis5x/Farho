@@ -1,4 +1,6 @@
 import { SettingsForm } from "./form";
+import { SmsForm } from "./sms-form";
+import { getSms } from "@/lib/sms";
 import { deleteStore } from "@/lib/actions/store";
 import { requireStore } from "@/lib/auth";
 
@@ -13,7 +15,7 @@ export default async function SettingsPage({
 }) {
   const { storeId } = await params;
   const { error } = await searchParams;
-  const { store } = await requireStore(storeId);
+  const { store } = await requireStore(storeId, "owner");
   return (
     <div className="max-w-3xl space-y-6">
       <div>
@@ -21,6 +23,7 @@ export default async function SettingsPage({
         <p className="text-sm text-zinc-600">Store details, delivery and contact information.</p>
       </div>
       <SettingsForm store={store} />
+      <SmsForm storeId={store.id} current={await getSms(store.id).then((s) => (s ? { provider: s.provider, sender: s.sender, hasToken: !!s.token, events: s.events } : null))} />
       <div className="card border-rose-200 p-5">
         <h2 className="font-semibold text-rose-700">Delete store</h2>
         <p className="mt-1 text-sm text-zinc-600">

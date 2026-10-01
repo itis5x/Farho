@@ -3,7 +3,7 @@
 import bcrypt from "bcryptjs";
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { createSession, destroySession } from "@/lib/auth";
+import { claimInvites, createSession, destroySession } from "@/lib/auth";
 import { createUser, getUserByEmail } from "@/lib/data";
 import type { FormState } from "@/lib/types";
 
@@ -22,7 +22,8 @@ export async function signup(_prev: FormState, form: FormData): Promise<FormStat
 
   const user = await createUser({ name, email, password_hash: await bcrypt.hash(password, 10) });
   await createSession(user.id);
-  redirect("/dashboard/new");
+  await claimInvites({ id: user.id, email });
+  redirect("/dashboard");
 }
 
 export async function login(_prev: FormState, form: FormData): Promise<FormState> {
@@ -33,6 +34,7 @@ export async function login(_prev: FormState, form: FormData): Promise<FormState
     return { error: "Incorrect email or password." };
   }
   await createSession(user.id);
+  await claimInvites({ id: user.id, email });
   redirect("/dashboard");
 }
 

@@ -4,11 +4,13 @@ import { notFound } from "next/navigation";
 import { AddToCart } from "@/components/storefront/add-to-cart";
 import { ProductCard } from "@/components/storefront/product-card";
 import { ProductGallery } from "@/components/storefront/product-gallery";
-import { getActiveProductBySlug, getCategory, listProducts, listVariants, productImages, productOptions } from "@/lib/data";
+import { ReviewForm, Stars } from "@/components/storefront/reviews";
+import { HeartButton } from "@/components/storefront/wishlist";
+import { getActiveProductBySlug, getCategory, listProductReviews, listProducts, listVariants, productImages, productOptions } from "@/lib/data";
 import { getStorefront } from "@/lib/store-data";
 import { THEME_STYLES } from "@/lib/storefront";
 import type { Product } from "@/lib/types";
-import { formatMoney } from "@/lib/utils";
+import { formatDate, formatMoney } from "@/lib/utils";
 
 async function loadProduct(storeId: string, slug: string) {
   const p = await getActiveProductBySlug(storeId, slug);
@@ -45,6 +47,8 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
     product.compare_at_price && product.compare_at_price > product.price
       ? Math.round((1 - product.price / product.compare_at_price) * 100)
       : 0;
+  const reviews = await listProductReviews(product.id);
+  const avg = reviews.length ? reviews.reduce((s, r) => s + r.rating, 0) / reviews.length : 0;
   const options = productOptions(product);
   const variants = options.length ? await listVariants(product.id) : [];
   const prices = variants.map((v) => v.price ?? product.price);
@@ -69,7 +73,15 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
       <div className="grid gap-10 md:grid-cols-2">
         <ProductGallery images={productImages(product)} name={product.name} />
         <div>
-          <h1 className="text-3xl font-bold">{product.name}</h1>
+          <div className="flex items-start justify-between gap-3">
+            <h1 className="text-3xl font-bold">{product.name}</h1>
+            <HeartButton store={store.slug} item={{ id: product.id, slug: product.slug, name: product.name, price: product.price, image: product.image_url }} className="shrink-0 border border-zinc-200" />
+          </div>
+          {reviews.length > 0 && (
+            <a href="#reviews" className="mt-2 flex items-center gap-2 text-sm text-zinc-600">
+              <Stars value={avg} /> {avg.toFixed(1)} · {reviews.length} review{reviews.length > 1 ? "s" : ""}
+            </a>
+          )}
           <div className="mt-4 flex items-baseline gap-3">
             <span className="text-3xl font-bold text-brand">
               {minPrice !== maxPrice ? `${formatMoney(minPrice, store.currency)} – ${formatMoney(maxPrice, store.currency)}` : formatMoney(minPrice, store.currency)}
@@ -126,6 +138,38 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
           )}
         </div>
       </div>
+      <section id="reviews" className="mt-16 max-w-3xl">
+        <h2 className="text-2xl font-bold">Customer reviews</h2>
+        {reviews.length > 0 ? (
+          <div className="mt-2 flex items-center gap-2 text-zinc-600">
+            <Stars value={avg} className="text-xl" /> <span className="font-semibold text-zinc-900">{avg.toFixed(1)} out of 5</span> · {reviews.length} review{reviews.length > 1 ? "s" : ""}
+          </div>
+        ) : (
+          <p className="mt-2 text-zinc-500">No reviews yet — be the first!</p>
+        )}
+        <div className="mt-4">
+          <ReviewForm storeSlug={store.slug} productId={product.id} buttonClass={t.button} />
+        </div>
+        <ul className="mt-6 divide-y divide-zinc-100">
+          {reviews.slice(0, 30).map((r) => (
+            <li key={r.id} className="py-4">
+              <div className="flex flex-wrap items-center gap-2">
+                <Stars value={r.rating} />
+                <span className="font-semibold">{r.name}</span>
+                {r.verified && <span className="rounded bg-emerald-100 px-1.5 text-xs font-medium text-emerald-800">✓ Verified buyer</span>}
+                <span className="text-xs text-zinc-400">{formatDate(r.created_at)}</span>
+              </div>
+              {r.text && <p className="mt-2 whitespace-pre-line text-zinc-700">{r.text}</p>}
+              {r.reply && (
+                <p className="mt-2 rounded-lg bg-zinc-50 p-3 text-sm text-zinc-700">
+                  <span className="font-semibold">{store.name}:</span> {r.reply}
+                </p>
+              )}
+            </li>
+          ))}
+        </ul>
+      </section>
+
       {related.length > 0 && (
         <section className="mt-20">
           <h2 className="mb-6 text-2xl font-bold">You may also like</h2>

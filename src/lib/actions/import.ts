@@ -15,7 +15,7 @@ const yes = (v: string | undefined, dflt: boolean) => (v?.trim() ? /^(y|yes|true
 
 /** Imports products from CSV. Rows with a known SKU (or the same name) update the existing product. */
 export async function importProducts(storeId: string, _prev: FormState, form: FormData): Promise<FormState> {
-  const { store } = await requireStore(storeId);
+  const { store } = await requireStore(storeId, "manager");
   const file = form.get("file");
   if (!(file instanceof File) || !file.size) return { error: "Choose a CSV file." };
   if (file.size > 2 * 1024 * 1024) return { error: "The file is larger than 2 MB." };

@@ -10,7 +10,7 @@ export const metadata = { title: "Delivery" };
 
 export default async function DeliveryPage({ params }: { params: Promise<{ storeId: string }> }) {
   const { storeId } = await params;
-  const { store } = await requireStore(storeId);
+  const { store } = await requireStore(storeId, "manager");
   const [pathao, ncm, branches, secret, origin] = await Promise.all([
     getPathao(store.id),
     getNcm(store.id),

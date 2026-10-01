@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { CartButton, CartProvider } from "@/components/storefront/cart";
 import { ChatWidget } from "@/components/storefront/chat-widget";
+import { WishlistLink } from "@/components/storefront/wishlist";
 import { parseLayout } from "@/lib/builder/schema";
 import { getStorefront } from "@/lib/store-data";
 import { FONT_CLASS, THEME_STYLES } from "@/lib/storefront";
@@ -93,6 +94,7 @@ export default async function StorefrontLayout({
               <Link href={`${base}/track`} className="hover:opacity-70">
                 Track order
               </Link>
+              <WishlistLink store={store.slug} href={`${base}/wishlist`} />
               <CartButton href={`${base}/cart`} className={centered ? "absolute right-4 top-5" : ""} />
             </nav>
           </div>

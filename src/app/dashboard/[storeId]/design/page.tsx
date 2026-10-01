@@ -9,7 +9,7 @@ export const metadata = { title: "Website design" };
 
 export default async function DesignPage({ params }: { params: Promise<{ storeId: string }> }) {
   const { storeId } = await params;
-  const { store } = await requireStore(storeId);
+  const { store } = await requireStore(storeId, "manager");
   const categories = await listCategories(store.id);
   const templates = TEMPLATES.map(({ id, name, description, preview, theme, primary_color, font }) => ({ id, name, description, preview, theme, primary_color, font }));
   return (

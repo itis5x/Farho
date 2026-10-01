@@ -2,6 +2,7 @@ import "server-only";
 import crypto from "node:crypto";
 import { addOrderEvent, getStoreSecret, listOrderItems, setStoreSecret, updateOrderRow } from "@/lib/data";
 import type { Order, Store } from "@/lib/types";
+import { notifyOrder } from "@/lib/sms";
 import { formatMoney } from "@/lib/utils";
 import { ncmCreateOrder, ncmStatus, type NcmCredentials } from "./ncm";
 import { pathaoCreateOrder, pathaoStatus, type PathaoCredentials } from "./pathao";
@@ -34,9 +35,11 @@ export async function applyCourierStatus(order: Order, status: string) {
     const cod = order.payment_method === "cod" && order.payment_status === "unpaid";
     await updateOrderRow(order.id, { status: "delivered", ...(cod ? { payment_status: "paid" as const } : {}) });
     await addOrderEvent(order.store_id, order.id, "status", "Marked delivered by the courier");
+    void notifyOrder({ ...order, status: "delivered" }, "delivered");
   } else if (!RETURNED.test(status) && ["pending", "confirmed", "processing"].includes(order.status) && /(picked|transit|hub|out for|dispatch|sent)/i.test(status)) {
     await updateOrderRow(order.id, { status: "shipped" });
     await addOrderEvent(order.store_id, order.id, "status", "Marked shipped — courier has the parcel");
+    void notifyOrder({ ...order, status: "shipped" }, "shipped");
   }
 }
 

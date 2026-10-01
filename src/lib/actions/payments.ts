@@ -13,7 +13,7 @@ const on = (form: FormData, k: string) => form.get(k) === "on";
 const mode = (form: FormData, k: string): GatewayMode => (form.get(k) === "own" ? "own" : "farho");
 
 export async function savePayments(storeId: string, _prev: FormState, form: FormData): Promise<FormState> {
-  const { store } = await requireStore(storeId);
+  const { store } = await requireStore(storeId, "owner");
   const current = getPaymentSettings(store);
 
   let qrImage: string;
