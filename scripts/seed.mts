@@ -27,7 +27,8 @@ const wipe = (tableId: string, queries: string[]) => db.deleteRows({ databaseId:
 // Remove a previous demo store and user.
 const old = await db.listRows({ databaseId: DATABASE_ID, tableId: TABLES.stores, queries: [Query.equal("slug", "demo")] });
 for (const s of old.rows) {
-  for (const t of [TABLES.orderEvents, TABLES.orderItems, TABLES.orders, TABLES.customers, TABLES.coupons, TABLES.products, TABLES.categories]) {
+  for (const t of Object.values(TABLES)) {
+    if (t === TABLES.users || t === TABLES.sessions || t === TABLES.stores) continue;
     await wipe(t, [Query.equal("store_id", s.$id)]);
   }
   await db.deleteRow({ databaseId: DATABASE_ID, tableId: TABLES.stores, rowId: s.$id });
@@ -59,6 +60,13 @@ const storeId = await create(TABLES.stores, {
   contact_email: "hello@himalayanthreads.example",
   address: "Thamel, Kathmandu",
   instagram_url: "https://instagram.com/",
+  payments: JSON.stringify({
+    cod: { enabled: true, label: "Cash on delivery" },
+    esewa: { enabled: true, mode: "farho" },
+    khalti: { enabled: false, mode: "farho" },
+    qr: { enabled: false, label: "Scan & pay", image_url: "", instructions: "" },
+    bank: { enabled: true, details: "Nabil Bank\nHimalayan Threads Pvt. Ltd.\nA/C 0123456789012\nThamel branch" },
+  }),
 });
 
 const cat = (name: string, slug: string) => create(TABLES.categories, { store_id: storeId, name, slug });
@@ -93,6 +101,42 @@ for (const [name, price, compare, stock, category, featured, description] of pro
   });
   productRows.push({ id, name, price, image });
 }
+
+// A product with sizes and colours.
+const teeId = await create(TABLES.products, {
+  store_id: storeId,
+  category_id: knit,
+  name: "Hemp Everyday Tee",
+  slug: "hemp-everyday-tee",
+  description: "Breathable hemp-cotton tee, dyed with natural colours.",
+  price: 1500,
+  cost_price: 650,
+  stock: 0,
+  featured: true,
+  image_url: "https://picsum.photos/seed/hemp-tee/600/600",
+  images: JSON.stringify(["https://picsum.photos/seed/hemp-tee-2/600/600", "https://picsum.photos/seed/hemp-tee-3/600/600"]),
+  options: JSON.stringify([{ name: "Size", values: ["S", "M", "L"] }, { name: "Colour", values: ["Natural", "Indigo"] }]),
+});
+let teeStock = 0;
+let pos = 0;
+for (const size of ["S", "M", "L"]) {
+  for (const colour of ["Natural", "Indigo"]) {
+    const stock = size === "L" && colour === "Indigo" ? 0 : 6;
+    teeStock += stock;
+    await create(TABLES.variants, {
+      store_id: storeId,
+      product_id: teeId,
+      title: `${size} / ${colour}`,
+      option1: size,
+      option2: colour,
+      price: colour === "Indigo" ? 1650 : null,
+      stock,
+      sku: `TEE-${size}-${colour.slice(0, 3).toUpperCase()}`,
+      position: pos++,
+    });
+  }
+}
+await db.updateRow({ databaseId: DATABASE_ID, tableId: TABLES.products, rowId: teeId, data: { stock: teeStock } });
 
 await create(TABLES.coupons, { store_id: storeId, code: "DASHAIN10", kind: "percent", value: 10, min_subtotal: 1000 });
 
@@ -140,6 +184,26 @@ for (let i = 0; i < 18; i++) {
   ]);
 }
 await db.updateRow({ databaseId: DATABASE_ID, tableId: TABLES.stores, rowId: storeId, data: { next_order_number: number } });
+
+// A few reviews.
+const reviews: [number, string, number, string][] = [
+  [0, "Aarati Shrestha", 5, "So soft and warm — exactly like the photos. Fast delivery too!"],
+  [0, "Bikash Gurung", 4, "Beautiful shawl, bought it as a gift for my mother."],
+  [3, "Sita Tamang", 5, "The kids love the garland. Great colours."],
+  [6, "Rohan Karki", 5, "Perfect fit and really warm."],
+];
+for (const [i, name, rating, text] of reviews) {
+  await create(TABLES.reviews, {
+    store_id: storeId,
+    product_id: productRows[i].id,
+    name,
+    rating,
+    text,
+    verified: true,
+    approved: true,
+    created_at: new Date(Date.now() - (i + 1) * 86_400_000).toISOString(),
+  });
+}
 
 console.log("Seeded demo store → /store/demo");
 console.log("Login: demo@farho.app / demo1234");
