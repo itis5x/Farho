@@ -5,6 +5,8 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 
 export type CartItem = {
   productId: string;
+  variantId?: string;
+  variantTitle?: string;
   slug: string;
   name: string;
   price: number;
@@ -19,12 +21,15 @@ type CartCtx = {
   subtotal: number;
   ready: boolean;
   add: (item: Omit<CartItem, "quantity">, qty?: number) => void;
-  setQty: (productId: string, qty: number) => void;
-  remove: (productId: string) => void;
+  setQty: (key: string, qty: number) => void;
+  remove: (key: string) => void;
   clear: () => void;
 };
 
 const Ctx = createContext<CartCtx | null>(null);
+
+/** A cart line is one product in one variant. */
+export const lineKey = (i: Pick<CartItem, "productId" | "variantId">) => `${i.productId}:${i.variantId ?? ""}`;
 
 export function CartProvider({ storeSlug, children }: { storeSlug: string; children: React.ReactNode }) {
   const key = `farho_cart_v2_${storeSlug}`;
@@ -54,20 +59,19 @@ export function CartProvider({ storeSlug, children }: { storeSlug: string; child
 
   const add = useCallback<CartCtx["add"]>((item, qty = 1) => {
     setItems((prev) => {
-      const existing = prev.find((i) => i.productId === item.productId);
+      const key = lineKey(item);
+      const existing = prev.find((i) => lineKey(i) === key);
       if (existing)
-        return prev.map((i) =>
-          i.productId === item.productId ? { ...i, ...item, quantity: clampQty(i.quantity + qty, item.stock) } : i,
-        );
+        return prev.map((i) => (lineKey(i) === key ? { ...i, ...item, quantity: clampQty(i.quantity + qty, item.stock) } : i));
       return [...prev, { ...item, quantity: clampQty(qty, item.stock) }];
     });
   }, []);
 
-  const setQty = useCallback((productId: string, qty: number) => {
-    setItems((prev) => prev.map((i) => (i.productId === productId ? { ...i, quantity: clampQty(qty, i.stock) } : i)));
+  const setQty = useCallback((key: string, qty: number) => {
+    setItems((prev) => prev.map((i) => (lineKey(i) === key ? { ...i, quantity: clampQty(qty, i.stock) } : i)));
   }, []);
 
-  const remove = useCallback((productId: string) => setItems((prev) => prev.filter((i) => i.productId !== productId)), []);
+  const remove = useCallback((key: string) => setItems((prev) => prev.filter((i) => lineKey(i) !== key)), []);
   const clear = useCallback(() => setItems([]), []);
 
   const value = useMemo(

@@ -56,7 +56,28 @@ export type Product = {
   stock: number | null;
   active: boolean;
   featured: boolean;
+  images: string;
+  options: string;
+  cost_price: number | null;
+  barcode: string;
   created_at: string;
+};
+
+export type ProductOption = { name: string; values: string[] };
+
+export type Variant = {
+  id: string;
+  store_id: string;
+  product_id: string;
+  title: string;
+  option1: string;
+  option2: string;
+  option3: string;
+  price: number | null;
+  stock: number | null;
+  sku: string;
+  image_url: string;
+  position: number;
 };
 
 export type Customer = {
@@ -134,9 +155,12 @@ export type OrderItem = {
   store_id: string;
   order_id: string;
   product_id: string;
+  variant_id: string;
+  variant_title: string;
   name: string;
   image_url: string;
   price: number;
+  cost_price: number | null;
   quantity: number;
 };
 

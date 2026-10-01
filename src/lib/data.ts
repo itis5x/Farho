@@ -14,7 +14,7 @@ import {
 } from "./appwrite";
 import { TABLES } from "./appwrite-schema";
 import { decrypt, encrypt } from "./crypto";
-import type { Category, Coupon, Customer, LedgerEntry, Order, OrderEvent, OrderItem, Product, Store, User } from "./types";
+import type { Category, Coupon, Customer, LedgerEntry, Order, OrderEvent, OrderItem, Product, ProductOption, Store, User, Variant } from "./types";
 
 /* --------------------------------- Users --------------------------------- */
 
@@ -75,6 +75,7 @@ export async function deleteStoreCascade(storeId: string) {
     deleteRowsWhere(TABLES.orderItems, byStore),
     deleteRowsWhere(TABLES.coupons, byStore),
     deleteRowsWhere(TABLES.products, byStore),
+    deleteRowsWhere(TABLES.variants, byStore),
     deleteRowsWhere(TABLES.categories, byStore),
   ]);
   await Promise.all([deleteRowsWhere(TABLES.orders, byStore), deleteRowsWhere(TABLES.customers, byStore)]);
@@ -139,7 +140,56 @@ export const createProductRow = (data: Omit<Product, "id" | "created_at">) =>
 
 export const updateProductRow = (id: string, data: Partial<Product>) => updateRow<Product>(TABLES.products, id, data);
 
-export const deleteProductRow = (id: string) => deleteRow(TABLES.products, id);
+export async function deleteProductRow(id: string) {
+  await deleteRowsWhere(TABLES.variants, [Query.equal("product_id", id)]);
+  await deleteRow(TABLES.products, id);
+}
+
+/* -------------------------------- Variants ------------------------------- */
+
+export const listVariants = (productId: string) =>
+  listAllRows<Variant>(TABLES.variants, [Query.equal("product_id", productId), Query.orderAsc("position")]);
+
+export const listStoreVariants = (storeId: string) => listAllRows<Variant>(TABLES.variants, [Query.equal("store_id", storeId)]);
+
+export const getVariant = (id: string) => getRow<Variant>(TABLES.variants, id);
+
+/** Replaces a product's variants, keeping rows (and their ids) whose title still exists. */
+export async function syncVariants(storeId: string, productId: string, next: Omit<Variant, "id" | "store_id" | "product_id">[]) {
+  const existing = await listVariants(productId);
+  const byTitle = new Map(existing.map((v) => [v.title, v]));
+  const keep = new Set<string>();
+  for (const v of next) {
+    const found = byTitle.get(v.title);
+    if (found) {
+      keep.add(found.id);
+      await updateRow(TABLES.variants, found.id, v);
+    } else {
+      await createRow(TABLES.variants, { ...v, store_id: storeId, product_id: productId });
+    }
+  }
+  for (const v of existing) if (!keep.has(v.id)) await deleteRow(TABLES.variants, v.id);
+}
+
+export function productOptions(p: Pick<Product, "options">): ProductOption[] {
+  try {
+    const o = p.options ? (JSON.parse(p.options) as ProductOption[]) : [];
+    return Array.isArray(o) ? o.filter((x) => x.name && x.values?.length) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function extraImages(p: Pick<Product, "images">): string[] {
+  try {
+    const list = p.images ? (JSON.parse(p.images) as string[]) : [];
+    return Array.isArray(list) ? list.filter((x) => typeof x === "string" && x) : [];
+  } catch {
+    return [];
+  }
+}
+
+export const productImages = (p: Pick<Product, "image_url" | "images">) => [p.image_url, ...extraImages(p)].filter(Boolean);
 
 export const listLowStock = (storeId: string) =>
   listRows<Product>(TABLES.products, [

@@ -18,6 +18,7 @@ import {
   getCouponByCode,
   getProduct,
   productSlugTaken,
+  syncVariants,
   updateCategoryRow,
   updateCouponRow,
   updateProductRow,
@@ -61,7 +62,40 @@ const productSchema = z.object({
   category_id: z.string().trim().max(36).default(""),
   active: z.preprocess((v) => v === "on", z.boolean()),
   featured: z.preprocess((v) => v === "on", z.boolean()),
+  cost_price: optionalNumber,
+  barcode: z.string().trim().max(40).default(""),
 });
+
+const json = <T extends z.ZodTypeAny>(schema: T) =>
+  z.preprocess((v) => {
+    try {
+      return typeof v === "string" && v ? JSON.parse(v) : undefined;
+    } catch {
+      return undefined;
+    }
+  }, schema);
+
+const optionsSchema = json(
+  z.array(z.object({ name: z.string().trim().min(1).max(30), values: z.array(z.string().trim().min(1).max(40)).min(1).max(30) })).max(3).default([]),
+);
+const variantsSchema = json(
+  z
+    .array(
+      z.object({
+        title: z.string().max(120),
+        option1: z.string().max(60).default(""),
+        option2: z.string().max(60).default(""),
+        option3: z.string().max(60).default(""),
+        price: z.number().min(0).nullable().default(null),
+        stock: z.number().int().min(0).max(1_000_000).nullable().default(null),
+        sku: z.string().max(80).default(""),
+        image_url: z.string().max(500).default(""),
+      }),
+    )
+    .max(100)
+    .default([]),
+);
+const imagesSchema = json(z.array(z.string().regex(/^https?:\/\//).max(500)).max(10).default([]));
 
 export async function saveProduct(
   storeId: string,
@@ -87,10 +121,31 @@ export async function saveProduct(
     return { error: (e as Error).message };
   }
 
+  const options = optionsSchema.safeParse(form.get("options_json"));
+  const variants = variantsSchema.safeParse(form.get("variants_json"));
+  const images = imagesSchema.safeParse(form.get("images_json"));
+  if (!options.success || !variants.success || !images.success) return { error: "Some variant or photo details are invalid." };
+  const variantRows = options.data.length ? variants.data.map((v, i) => ({ ...v, position: i })) : [];
+  if (options.data.length && !variantRows.length) return { error: "Add at least one variant, or remove the options." };
+
+  // With variants, the product's stock is the total across variants (unlimited if any variant is unlimited).
+  const stock = variantRows.length
+    ? variantRows.some((v) => v.stock == null)
+      ? null
+      : variantRows.reduce((sum, v) => sum + (v.stock ?? 0), 0)
+    : d.stock;
+
   const slug = await uniqueSlug(productSlugTaken, store.id, slugify(d.name), productId ?? undefined);
-  const data = { ...d, slug, image_url: image };
-  if (existing) await updateProductRow(existing.id, data);
-  else await createProductRow({ ...data, store_id: store.id });
+  const data = {
+    ...d,
+    stock,
+    slug,
+    image_url: image,
+    images: JSON.stringify(images.data),
+    options: options.data.length ? JSON.stringify(options.data) : "",
+  };
+  const saved = existing ? await updateProductRow(existing.id, data) : await createProductRow({ ...data, store_id: store.id });
+  await syncVariants(store.id, saved.id, variantRows);
   refresh(store);
   redirect(`/dashboard/${store.id}/products?saved=1`);
 }

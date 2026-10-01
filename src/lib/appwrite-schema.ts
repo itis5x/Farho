@@ -21,6 +21,7 @@ export const TABLES = {
   conversations: "conversations",
   messages: "messages",
   autoReplies: "auto_replies",
+  variants: "product_variants",
 } as const;
 
 export type ColumnDef =
@@ -126,6 +127,12 @@ export const SCHEMA: TableDef[] = [
       { key: "stock", type: "integer" },
       { key: "active", type: "boolean", default: true },
       { key: "featured", type: "boolean", default: false },
+      // JSON array of extra photo URLs (image_url stays the main photo).
+      { key: "images", type: "text" },
+      // JSON: [{ name: "Size", values: ["S", "M"] }, …]; when set, price/stock live on product_variants.
+      { key: "options", type: "text" },
+      { key: "cost_price", type: "float" },
+      v("barcode", 40),
     ],
     indexes: [
       { key: "store_slug_unique", type: "unique", columns: ["store_id", "slug"] },
@@ -213,9 +220,12 @@ export const SCHEMA: TableDef[] = [
       v("store_id", 36, { required: true }),
       v("order_id", 36, { required: true }),
       v("product_id", 36),
+      v("variant_id", 36),
+      v("variant_title", 120),
       v("name", 150, { required: true }),
       v("image_url", 500),
       { key: "price", type: "float", required: true },
+      { key: "cost_price", type: "float" },
       { key: "quantity", type: "integer", required: true },
     ],
     indexes: [
@@ -322,5 +332,26 @@ export const SCHEMA: TableDef[] = [
       { key: "active", type: "boolean", default: true },
     ],
     indexes: [{ key: "store_idx", type: "key", columns: ["store_id"] }],
+  },
+  {
+    id: TABLES.variants,
+    name: "Product variants",
+    columns: [
+      v("store_id", 36, { required: true }),
+      v("product_id", 36, { required: true }),
+      v("title", 120, { required: true }),
+      v("option1", 60),
+      v("option2", 60),
+      v("option3", 60),
+      { key: "price", type: "float" },
+      { key: "stock", type: "integer" },
+      v("sku", 80),
+      v("image_url", 500),
+      { key: "position", type: "integer", default: 0 },
+    ],
+    indexes: [
+      { key: "product_idx", type: "key", columns: ["product_id"] },
+      { key: "store_idx", type: "key", columns: ["store_id"] },
+    ],
   },
 ];

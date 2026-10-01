@@ -3,7 +3,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AddToCart } from "@/components/storefront/add-to-cart";
 import { ProductCard } from "@/components/storefront/product-card";
-import { getActiveProductBySlug, getCategory, listProducts } from "@/lib/data";
+import { ProductGallery } from "@/components/storefront/product-gallery";
+import { getActiveProductBySlug, getCategory, listProducts, listVariants, productImages, productOptions } from "@/lib/data";
 import { getStorefront } from "@/lib/store-data";
 import { THEME_STYLES } from "@/lib/storefront";
 import type { Product } from "@/lib/types";
@@ -44,6 +45,12 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
     product.compare_at_price && product.compare_at_price > product.price
       ? Math.round((1 - product.price / product.compare_at_price) * 100)
       : 0;
+  const options = productOptions(product);
+  const variants = options.length ? await listVariants(product.id) : [];
+  const prices = variants.map((v) => v.price ?? product.price);
+  const minPrice = prices.length ? Math.min(...prices) : product.price;
+  const maxPrice = prices.length ? Math.max(...prices) : product.price;
+  const whatsapp = store.contact_phone.replace(/\D/g, "").replace(/^(9\d{9})$/, "977$1");
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-10">
@@ -60,18 +67,13 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
         )}
       </nav>
       <div className="grid gap-10 md:grid-cols-2">
-        <div className="overflow-hidden rounded-2xl bg-zinc-100">
-          {product.image_url ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={product.image_url} alt={product.name} className="aspect-square w-full object-cover" />
-          ) : (
-            <div className="grid aspect-square place-items-center text-7xl text-zinc-300">🛍️</div>
-          )}
-        </div>
+        <ProductGallery images={productImages(product)} name={product.name} />
         <div>
           <h1 className="text-3xl font-bold">{product.name}</h1>
           <div className="mt-4 flex items-baseline gap-3">
-            <span className="text-3xl font-bold text-brand">{formatMoney(product.price, store.currency)}</span>
+            <span className="text-3xl font-bold text-brand">
+              {minPrice !== maxPrice ? `${formatMoney(minPrice, store.currency)} – ${formatMoney(maxPrice, store.currency)}` : formatMoney(minPrice, store.currency)}
+            </span>
             {off > 0 && (
               <>
                 <span className="text-lg text-zinc-400 line-through">{formatMoney(product.compare_at_price!, store.currency)}</span>
@@ -100,6 +102,10 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
               }}
               cartHref={`${base}/cart`}
               buttonClass={t.button}
+              options={options}
+              variants={variants.map(({ id, title, option1, option2, option3, price, stock, image_url }) => ({ id, title, option1, option2, option3, price, stock, image_url }))}
+              currency={store.currency}
+              whatsapp={whatsapp.length >= 10 ? whatsapp : undefined}
             />
           </div>
           <ul className="mt-8 space-y-2 text-sm text-zinc-600">

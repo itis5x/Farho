@@ -4,7 +4,7 @@ import { ConfirmButton } from "@/components/form";
 import { ProductForm } from "@/components/product-form";
 import { deleteProduct } from "@/lib/actions/catalog";
 import { requireStore } from "@/lib/auth";
-import { getProduct, listCategories } from "@/lib/data";
+import { getProduct, listCategories, extraImages, listVariants, productOptions } from "@/lib/data";
 
 export const metadata = { title: "Edit product" };
 
@@ -15,7 +15,7 @@ export default async function EditProductPage({
 }) {
   const { storeId, productId } = await params;
   const { store } = await requireStore(storeId);
-  const [product, categories] = await Promise.all([getProduct(store.id, productId), listCategories(store.id)]);
+  const [product, categories, variants] = await Promise.all([getProduct(store.id, productId), listCategories(store.id), listVariants(productId)]);
   if (!product) notFound();
 
   return (
@@ -36,7 +36,15 @@ export default async function EditProductPage({
           </form>
         </div>
       </div>
-      <ProductForm storeId={store.id} product={product} categories={categories} currency={store.currency} />
+      <ProductForm
+        storeId={store.id}
+        product={product}
+        categories={categories}
+        currency={store.currency}
+        options={productOptions(product)}
+        variants={variants}
+        images={extraImages(product)}
+      />
     </div>
   );
 }

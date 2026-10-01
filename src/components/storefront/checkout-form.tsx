@@ -38,7 +38,7 @@ export function CheckoutForm({
   const [error, setError] = useState("");
   const [placing, startPlacing] = useTransition();
   const money = (n: number) => formatMoney(n, currency);
-  const cartLines = items.map((i) => ({ productId: i.productId, quantity: i.quantity }));
+  const cartLines = items.map((i) => ({ productId: i.productId, ...(i.variantId ? { variantId: i.variantId } : {}), quantity: i.quantity }));
   const cartKey = JSON.stringify(cartLines);
 
   const refreshQuote = useCallback(
@@ -170,7 +170,7 @@ export function CheckoutForm({
         <h2 className="font-semibold">Order summary</h2>
         <ul className="mt-4 space-y-3">
           {items.map((it) => (
-            <li key={it.productId} className="flex items-center gap-3 text-sm">
+            <li key={`${it.productId}:${it.variantId ?? ""}`} className="flex items-center gap-3 text-sm">
               <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-md bg-zinc-200">
                 {it.image && (
                   // eslint-disable-next-line @next/next/no-img-element
@@ -180,7 +180,10 @@ export function CheckoutForm({
                   {it.quantity}
                 </span>
               </div>
-              <span className="flex-1">{it.name}</span>
+              <span className="flex-1">
+                {it.name}
+                {it.variantTitle && <span className="block text-xs text-zinc-500">{it.variantTitle}</span>}
+              </span>
               <span className="font-medium">{money(it.price * it.quantity)}</span>
             </li>
           ))}

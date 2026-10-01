@@ -9,7 +9,7 @@ import { addOrderEvent, getOrder, getOrderByToken, getStoreBySlug, listOrderItem
 import { createOrder, priceCart, type CartLine } from "@/lib/orders";
 import { availableMethods, startOnlinePayment, type PaymentStart } from "@/lib/payments/service";
 import { MANUAL_METHODS, ONLINE_METHODS, PAYMENT_METHODS, type PaymentMethod } from "@/lib/payments/settings";
-import { ORDER_STATUSES, PAYMENT_STATUSES, type Product } from "@/lib/types";
+import { ORDER_STATUSES, PAYMENT_STATUSES } from "@/lib/types";
 import { resolveImage } from "@/lib/uploads";
 
 /* ----------------------------- Admin actions ----------------------------- */
@@ -21,14 +21,25 @@ async function adjustStock(orderId: string, direction: 1 | -1) {
     items
       .filter((it) => it.product_id)
       .map(async (it) => {
+        const table = it.variant_id ? TABLES.variants : TABLES.products;
+        const id = it.variant_id || it.product_id;
         try {
-          const p = await getRow<Product>(TABLES.products, it.product_id);
-          if (!p || p.stock == null) return;
+          const row = await getRow<{ id: string; stock: number | null }>(table, id);
+          if (!row || row.stock == null) return;
           const updated =
             direction === 1
-              ? await incrementColumn<Product>(TABLES.products, p.id, "stock", it.quantity)
-              : await decrementColumn<Product>(TABLES.products, p.id, "stock", it.quantity);
-          if (updated.stock != null && updated.stock < 0) await updateRow(TABLES.products, p.id, { stock: 0 });
+              ? await incrementColumn<{ stock: number | null }>(table, id, "stock", it.quantity)
+              : await decrementColumn<{ stock: number | null }>(table, id, "stock", it.quantity);
+          if (updated.stock != null && updated.stock < 0) await updateRow(table, id, { stock: 0 });
+          if (it.variant_id) {
+            const product = await getRow<{ stock: number | null }>(TABLES.products, it.product_id);
+            if (product?.stock != null) {
+              const p = direction === 1
+                ? await incrementColumn<{ stock: number | null }>(TABLES.products, it.product_id, "stock", it.quantity)
+                : await decrementColumn<{ stock: number | null }>(TABLES.products, it.product_id, "stock", it.quantity);
+              if (p.stock != null && p.stock < 0) await updateRow(TABLES.products, it.product_id, { stock: 0 });
+            }
+          }
         } catch (e) {
           if (!isNotFound(e)) throw e;
         }
@@ -75,9 +86,15 @@ export async function addOrderNote(storeId: string, orderId: string, form: FormD
 
 export type { CartLine } from "@/lib/orders";
 const cartSchema = z
-  .array(z.object({ productId: z.string().regex(/^[a-zA-Z0-9._-]{1,36}$/), quantity: z.number().int().min(1).max(99) }))
+  .array(
+    z.object({
+      productId: z.string().regex(/^[a-zA-Z0-9._-]{1,36}$/),
+      variantId: z.string().regex(/^[a-zA-Z0-9._-]{1,36}$/).optional(),
+      quantity: z.number().int().min(1).max(99),
+    }),
+  )
   .max(30)
-  .refine((lines) => new Set(lines.map((l) => l.productId)).size === lines.length, "Duplicate cart lines.");
+  .refine((lines) => new Set(lines.map((l) => `${l.productId}:${l.variantId ?? ""}`)).size === lines.length, "Duplicate cart lines.");
 
 async function loadPublishedStore(slug: string) {
   const store = await getStoreBySlug(slug);

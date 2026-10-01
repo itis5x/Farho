@@ -81,7 +81,7 @@ export type ChatOrderInput = {
   phone: string;
   address: string;
   city: string;
-  items: { product_id: string; quantity: number }[];
+  items: { product_id: string; variant_id?: string; quantity: number }[];
   payment_method: PaymentMethod;
   note?: string;
 };
@@ -93,7 +93,7 @@ export async function placeChatOrder(store: Store, conv: Conversation, input: Ch
   const source: OrderSource = conv.kind === "web" ? "chat" : conv.kind;
   const result = await createOrder({
     store,
-    cart: input.items.map((i) => ({ productId: i.product_id, quantity: i.quantity })),
+    cart: input.items.map((i) => ({ productId: i.product_id, ...(i.variant_id ? { variantId: i.variant_id } : {}), quantity: i.quantity })),
     customer: { name: input.customer_name, phone: input.phone, email: "", address: input.address, city: input.city },
     note: input.note,
     paymentMethod: method,

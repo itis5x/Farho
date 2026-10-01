@@ -110,6 +110,7 @@ export default async function OrderPage({ params }: { params: Promise<{ storeId:
                     ) : (
                       <span className="font-medium">{it.name}</span>
                     )}
+                    {it.variant_title && <div className="text-xs text-zinc-500">{it.variant_title}</div>}
                     <div className="text-sm text-zinc-500">
                       {money(it.price)} × {it.quantity}
                     </div>

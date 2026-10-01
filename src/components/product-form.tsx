@@ -4,18 +4,25 @@ import { useActionState } from "react";
 import { FormMessage, SubmitButton } from "@/components/form";
 import { ImageInput } from "@/components/image-input";
 import { saveProduct } from "@/lib/actions/catalog";
-import type { Category, Product } from "@/lib/types";
+import type { Category, Product, ProductOption, Variant } from "@/lib/types";
+import { GalleryEditor, VariantsEditor } from "./variants-editor";
 
 export function ProductForm({
   storeId,
   product,
   categories,
   currency,
+  options = [],
+  variants = [],
+  images = [],
 }: {
   storeId: string;
   product?: Product;
   categories: Category[];
   currency: string;
+  options?: ProductOption[];
+  variants?: Variant[];
+  images?: string[];
 }) {
   const [state, action] = useActionState(saveProduct.bind(null, storeId, product?.id ?? null), undefined);
   return (
@@ -66,7 +73,18 @@ export function ProductForm({
             <label className="label" htmlFor="sku">SKU</label>
             <input className="input" id="sku" name="sku" defaultValue={product?.sku} />
           </div>
+          <div>
+            <label className="label" htmlFor="cost_price">
+              Cost price <span className="font-normal text-zinc-400">(private — for profit reports)</span>
+            </label>
+            <input className="input" id="cost_price" name="cost_price" type="number" step="0.01" min="0" defaultValue={product?.cost_price ?? ""} />
+          </div>
+          <div>
+            <label className="label" htmlFor="barcode">Barcode</label>
+            <input className="input" id="barcode" name="barcode" defaultValue={product?.barcode} placeholder="Scan or type" />
+          </div>
         </div>
+        <VariantsEditor initialOptions={options} initialVariants={variants} currency={currency} />
       </div>
       <div className="space-y-6">
         <div className="card space-y-4 p-5">
@@ -91,8 +109,9 @@ export function ProductForm({
           </div>
         </div>
         <div className="card p-5">
-          <ImageInput name="image_url" label="Product image" defaultValue={product?.image_url} />
+          <ImageInput name="image_url" label="Main photo" defaultValue={product?.image_url} />
         </div>
+        <GalleryEditor storeId={storeId} initial={images} />
         <FormMessage state={state} />
         <SubmitButton className="btn-primary w-full">{product ? "Save changes" : "Add product"}</SubmitButton>
       </div>

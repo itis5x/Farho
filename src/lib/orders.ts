@@ -3,18 +3,20 @@ import crypto from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { createRow, decrementColumn, incrementColumn } from "./appwrite";
 import { TABLES } from "./appwrite-schema";
-import { addOrderEvent, getCouponByCode, getProduct, upsertCustomer } from "./data";
+import { addOrderEvent, getCouponByCode, getProduct, getVariant, productOptions, upsertCustomer } from "./data";
 import type { PaymentMethod } from "./payments/settings";
-import type { Coupon, Order, Product, Store } from "./types";
+import type { Coupon, Order, Product, Store, Variant } from "./types";
 import { formatMoney } from "./utils";
 
-export type CartLine = { productId: string; quantity: number };
+export type CartLine = { productId: string; variantId?: string; quantity: number };
 
 export const ORDER_SOURCES = ["website", "chat", "messenger", "instagram", "whatsapp", "telegram", "manual", "pos"] as const;
 export type OrderSource = (typeof ORDER_SOURCES)[number];
 
+export type PricedLine = { product: Product; variant: Variant | null; price: number; quantity: number };
+
 export type Priced = {
-  lines: { product: Product; quantity: number }[];
+  lines: PricedLine[];
   subtotal: number;
   discount: number;
   delivery: number;
@@ -27,21 +29,27 @@ const round = (n: number) => Math.round(n * 100) / 100;
 
 /** Prices a cart from the database (never trusting client prices) and checks stock. */
 export async function priceCart(store: Store, cart: CartLine[], couponCode: string): Promise<Priced | { error: string }> {
-  const products = await Promise.all(cart.map((l) => getProduct(store.id, l.productId)));
-  const lines: Priced["lines"] = [];
+  const [products, variants] = await Promise.all([
+    Promise.all(cart.map((l) => getProduct(store.id, l.productId))),
+    Promise.all(cart.map((l) => (l.variantId ? getVariant(l.variantId) : null))),
+  ]);
+  const lines: PricedLine[] = [];
   for (const [i, line] of cart.entries()) {
     const product = products[i];
     if (!product || !product.active) return { error: "One of the items in your cart is no longer available." };
-    if (product.stock != null && product.stock < line.quantity) {
-      return {
-        error: product.stock === 0 ? `“${product.name}” is sold out.` : `Only ${product.stock} of “${product.name}” left in stock.`,
-      };
+    const hasVariants = productOptions(product).length > 0;
+    const variant = variants[i];
+    if (hasVariants && (!variant || variant.product_id !== product.id)) return { error: `Please choose options for “${product.name}”.` };
+    const label = variant ? `${product.name} (${variant.title})` : product.name;
+    const stock = variant ? variant.stock : product.stock;
+    if (stock != null && stock < line.quantity) {
+      return { error: stock === 0 ? `“${label}” is sold out.` : `Only ${stock} of “${label}” left in stock.` };
     }
-    lines.push({ product, quantity: line.quantity });
+    lines.push({ product, variant: hasVariants ? variant : null, price: variant?.price ?? product.price, quantity: line.quantity });
   }
   if (lines.length === 0) return { error: "Your cart is empty." };
 
-  const subtotal = round(lines.reduce((s, l) => s + l.product.price * l.quantity, 0));
+  const subtotal = round(lines.reduce((s, l) => s + l.price * l.quantity, 0));
   let discount = 0;
   let coupon: Coupon | null = null;
   let couponError: string | undefined;
@@ -83,21 +91,27 @@ export async function createOrder(input: NewOrder): Promise<{ order: Order; pric
   if ("error" in priced) return priced;
   if (input.couponCode && priced.couponError) return { error: priced.couponError };
 
-  const reserved: { id: string; qty: number }[] = [];
+  const reserved: { table: string; id: string; qty: number }[] = [];
   const release = () =>
-    Promise.all(reserved.map((r) => incrementColumn(TABLES.products, r.id, "stock", r.qty).catch(() => undefined)));
+    Promise.all(reserved.map((r) => incrementColumn(r.table, r.id, "stock", r.qty).catch(() => undefined)));
 
   try {
-    for (const { product, quantity } of priced.lines) {
-      if (product.stock == null) continue;
+    for (const { product, variant, quantity } of priced.lines) {
+      const target = variant ? { table: TABLES.variants, id: variant.id, stock: variant.stock } : { table: TABLES.products, id: product.id, stock: product.stock };
+      if (target.stock == null) continue;
       let left: number | null;
       try {
-        left = (await decrementColumn<Product>(TABLES.products, product.id, "stock", quantity, 0)).stock;
+        left = (await decrementColumn<{ stock: number | null }>(target.table, target.id, "stock", quantity, 0)).stock;
       } catch {
         await release();
         return { error: `Sorry, “${product.name}” just sold out or doesn't have enough stock left.` };
       }
-      reserved.push({ id: product.id, qty: quantity });
+      reserved.push({ table: target.table, id: target.id, qty: quantity });
+      // Keep the product's total in step with its variants.
+      if (variant && product.stock != null) {
+        await decrementColumn(TABLES.products, product.id, "stock", quantity).catch(() => undefined);
+        reserved.push({ table: TABLES.products, id: product.id, qty: quantity });
+      }
       if (left != null && left < 0) {
         await release();
         return { error: `Sorry, “${product.name}” just sold out or doesn't have enough stock left.` };
@@ -133,14 +147,17 @@ export async function createOrder(input: NewOrder): Promise<{ order: Order; pric
     });
 
     await Promise.all([
-      ...priced.lines.map(({ product, quantity }) =>
+      ...priced.lines.map(({ product, variant, price, quantity }) =>
         createRow(TABLES.orderItems, {
           store_id: store.id,
           order_id: order.id,
           product_id: product.id,
+          variant_id: variant?.id ?? "",
+          variant_title: variant?.title ?? "",
           name: product.name,
-          image_url: product.image_url,
-          price: product.price,
+          image_url: variant?.image_url || product.image_url,
+          price,
+          cost_price: product.cost_price ?? null,
           quantity,
         }),
       ),

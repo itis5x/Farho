@@ -94,6 +94,7 @@ export default async function OrderStatusPage({
               </div>
               <div className="flex-1 text-sm">
                 <div className="font-medium">{it.name}</div>
+                {it.variant_title && <div className="text-xs text-zinc-500">{it.variant_title}</div>}
                 <div className="text-zinc-500">
                   {money(it.price)} × {it.quantity}
                 </div>

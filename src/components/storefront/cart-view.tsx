@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCart } from "./cart";
+import { lineKey, useCart } from "./cart";
 import { cn, formatMoney } from "@/lib/utils";
 
 export function CartView({ storeSlug, currency, buttonClass }: { storeSlug: string; currency: string; buttonClass: string }) {
@@ -26,7 +26,7 @@ export function CartView({ storeSlug, currency, buttonClass }: { storeSlug: stri
       <h1 className="text-3xl font-bold">Your cart</h1>
       <ul className="mt-8 divide-y divide-zinc-200 border-y border-zinc-200">
         {items.map((it) => (
-          <li key={it.productId} className="flex gap-4 py-4">
+          <li key={lineKey(it)} className="flex gap-4 py-4">
             <Link href={`${base}/p/${it.slug}`} className="h-24 w-24 shrink-0 overflow-hidden rounded-lg bg-zinc-100">
               {it.image && (
                 // eslint-disable-next-line @next/next/no-img-element
@@ -37,20 +37,21 @@ export function CartView({ storeSlug, currency, buttonClass }: { storeSlug: stri
               <div className="flex justify-between gap-4">
                 <Link href={`${base}/p/${it.slug}`} className="font-medium hover:underline">
                   {it.name}
+                  {it.variantTitle && <span className="block text-sm font-normal text-zinc-500">{it.variantTitle}</span>}
                 </Link>
                 <span className="font-semibold">{formatMoney(it.price * it.quantity, currency)}</span>
               </div>
               <div className="flex items-center justify-between">
                 <div className="flex items-center rounded-lg border border-zinc-300 text-sm">
-                  <button className="px-3 py-1" onClick={() => setQty(it.productId, it.quantity - 1)} aria-label="Decrease">
+                  <button className="px-3 py-1" onClick={() => setQty(lineKey(it), it.quantity - 1)} aria-label="Decrease">
                     −
                   </button>
                   <span className="w-8 text-center">{it.quantity}</span>
-                  <button className="px-3 py-1" onClick={() => setQty(it.productId, it.quantity + 1)} aria-label="Increase">
+                  <button className="px-3 py-1" onClick={() => setQty(lineKey(it), it.quantity + 1)} aria-label="Increase">
                     +
                   </button>
                 </div>
-                <button className="text-sm text-zinc-500 hover:text-rose-600" onClick={() => remove(it.productId)}>
+                <button className="text-sm text-zinc-500 hover:text-rose-600" onClick={() => remove(lineKey(it))}>
                   Remove
                 </button>
               </div>

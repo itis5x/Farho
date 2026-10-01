@@ -4,6 +4,7 @@ import { z } from "zod";
 import { availableMethods } from "@/lib/payments/service";
 import { METHOD_LABELS, PAYMENT_METHODS, type PaymentMethod } from "@/lib/payments/settings";
 import type { Conversation, Message, Store } from "@/lib/types";
+import { listVariants, productOptions } from "@/lib/data";
 import { formatMoney } from "@/lib/utils";
 import type { InboxSettings } from "./settings";
 import { orderStatusText, placeChatOrder, productLine, searchProducts } from "./tools";
@@ -22,7 +23,10 @@ const placeOrderInput = z.object({
   phone: z.string().regex(/^\+?[0-9\s-]{7,16}$/),
   address: z.string().min(4).max(250),
   city: z.string().min(2).max(80),
-  items: z.array(z.object({ product_id: z.string().min(1).max(36), quantity: z.number().int().min(1).max(99) })).min(1).max(20),
+  items: z
+    .array(z.object({ product_id: z.string().min(1).max(36), variant_id: z.string().max(36), quantity: z.number().int().min(1).max(99) }))
+    .min(1)
+    .max(20),
   payment_method: z.enum(PAYMENT_METHODS as [PaymentMethod, ...PaymentMethod[]]),
   note: z.string().max(500).optional(),
 });
@@ -74,8 +78,12 @@ function tools(takeOrders: boolean, methods: PaymentMethod[]): Anthropic.Beta.Be
             type: "array",
             items: {
               type: "object",
-              properties: { product_id: { type: "string" }, quantity: { type: "integer" } },
-              required: ["product_id", "quantity"],
+              properties: {
+                product_id: { type: "string" },
+                variant_id: { type: "string", description: "Variant id from search_products for products with options (size/colour); empty string otherwise" },
+                quantity: { type: "integer" },
+              },
+              required: ["product_id", "variant_id", "quantity"],
               additionalProperties: false,
             },
           },
@@ -177,11 +185,19 @@ async function runTool(store: Store, conv: Conversation, call: Anthropic.Beta.Be
     if (!input.success) return fail("Invalid input");
     const hits = await searchProducts(store, input.data.query, 6);
     if (!hits.length) return { content: "No matching products." };
-    return {
-      content: hits
-        .map(({ product: p }) => `id=${p.id} | ${productLine(store, p, origin).replace("\n", " | ")}${p.description ? ` | ${p.description.slice(0, 200)}` : ""}`)
-        .join("\n"),
-    };
+    const lines = await Promise.all(
+      hits.map(async ({ product: p }) => {
+        let line = `id=${p.id} | ${productLine(store, p, origin).replace("\n", " | ")}${p.description ? ` | ${p.description.slice(0, 200)}` : ""}`;
+        if (productOptions(p).length) {
+          const variants = await listVariants(p.id);
+          line += `\n  options (customer must pick one): ${variants
+            .map((v) => `variant_id=${v.id} ${v.title} ${formatMoney(v.price ?? p.price, store.currency)}${v.stock === 0 ? " SOLD OUT" : v.stock != null ? ` (${v.stock} left)` : ""}`)
+            .join("; ")}`;
+        }
+        return line;
+      }),
+    );
+    return { content: lines.join("\n") };
   }
   if (call.name === "get_order_status") {
     const input = orderStatusInput.safeParse(call.input);
